@@ -5,7 +5,8 @@ import {
 createAssignment,
 submitAssignment,
 getSubmissions,
-gradeSubmission
+gradeSubmission,
+getAssignments
 
 }
 from "../controllers/assignmentController.js";
@@ -53,6 +54,12 @@ upload.single("file"),
 
 submitAssignment
 
+);
+
+router.get(
+"/",
+protect,
+getAssignments
 );
 
 

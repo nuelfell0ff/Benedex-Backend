@@ -209,3 +209,37 @@ message:error.message
 }
 
 };
+
+// Get assignments
+export const getAssignments =
+async(req,res)=>{
+
+try{
+
+const assignments =
+await Assignment.find()
+
+.populate({
+
+path:"module",
+select:"title month"
+
+});
+
+res.json(
+assignments
+);
+
+}
+
+catch(error){
+
+res.status(500).json({
+
+message:error.message
+
+});
+
+}
+
+};
