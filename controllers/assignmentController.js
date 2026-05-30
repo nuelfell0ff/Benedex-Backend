@@ -1,39 +1,40 @@
 import Assignment from "../models/Assignment.js";
 import Submission from "../models/Submission.js";
 import cloudinary from "../config/cloudinary.js";
+import { applyXpToUser, recordLearningActivity } from "../utils/studentLearning.js";
 
 
 
 // Create Assignment
-export const createAssignment = async(req,res)=>{
+export const createAssignment = async (req, res) => {
 
-try{
+  try {
 
-const assignment =
-await Assignment.create({
+    const assignment =
+      await Assignment.create({
 
-title:req.body.title,
-description:req.body.description,
-module:req.body.module,
-dueDate:req.body.dueDate
+        title: req.body.title,
+        description: req.body.description,
+        module: req.body.module,
+        dueDate: req.body.dueDate
 
-});
+      });
 
-res.status(201).json(
-assignment
-);
+    res.status(201).json(
+      assignment
+    );
 
-}
+  }
 
-catch(error){
+  catch (error) {
 
-res.status(500).json({
+    res.status(500).json({
 
-message:error.message
+      message: error.message
 
-});
+    });
 
-}
+  }
 
 };
 
@@ -41,113 +42,124 @@ message:error.message
 
 
 // Submit Assignment
-export const submitAssignment = async(req,res)=>{
+export const submitAssignment = async (req, res) => {
 
-try{
+  try {
 
-if(!req.file){
+    if (!req.file) {
 
-return res.status(400).json({
+      return res.status(400).json({
 
-message:"No file uploaded"
+        message: "No file uploaded"
 
-});
+      });
 
-}
-
-
-
-const fileBase64 =
-`data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+    }
 
 
 
-const uploadedFile =
-await cloudinary.uploader.upload(
-
-fileBase64,
-
-{
-
-folder:"benedex-assignments",
-
-resource_type:"auto"
-
-}
-
-);
+    const fileBase64 =
+      `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
 
 
 
-const submission =
-await Submission.create({
+    const uploadedFile =
+      await cloudinary.uploader.upload(
 
-student:req.user._id,
+        fileBase64,
 
-assignment:req.body.assignment,
+        {
 
-fileUrl:uploadedFile.secure_url
+          folder: "benedex-assignments",
 
-});
+          resource_type: "auto"
+
+        }
+
+      );
 
 
 
-res.status(201).json({
+    const submission =
+      await Submission.create({
 
-message:"Assignment submitted",
+        student: req.user._id,
 
-submission
+        assignment: req.body.assignment,
 
-});
+        fileUrl: uploadedFile.secure_url
 
-}
+      });
 
-catch(error){
+    const assignment = await Assignment.findById(req.body.assignment).select("title");
 
-res.status(500).json({
+    await applyXpToUser(req.user, 25);
 
-message:error.message
+    await recordLearningActivity({
+      student: req.user._id,
+      type: "assignment_submitted",
+      title: `Submitted ${assignment?.title || "Assignment"}`,
+      points: 25
+    });
 
-});
 
-}
+
+    res.status(201).json({
+
+      message: "Assignment submitted",
+
+      submission
+
+    });
+
+  }
+
+  catch (error) {
+
+    res.status(500).json({
+
+      message: error.message
+
+    });
+
+  }
 
 };
 
 
 // Get all submissions
-export const getSubmissions = async(req,res)=>{
+export const getSubmissions = async (req, res) => {
 
-try{
+  try {
 
-const submissions =
-await Submission.find()
+    const submissions =
+      await Submission.find()
 
-.populate(
-"student",
-"fullName email"
-)
+        .populate(
+          "student",
+          "fullName email"
+        )
 
-.populate({
+        .populate({
 
-path:"assignment",
-select:"title"
+          path: "assignment",
+          select: "title"
 
-});
+        });
 
-res.json(submissions);
+    res.json(submissions);
 
-}
+  }
 
-catch(error){
+  catch (error) {
 
-res.status(500).json({
+    res.status(500).json({
 
-message:error.message
+      message: error.message
 
-});
+    });
 
-}
+  }
 
 };
 
@@ -155,91 +167,91 @@ message:error.message
 
 
 // Grade submission
-export const gradeSubmission = async(req,res)=>{
+export const gradeSubmission = async (req, res) => {
 
-try{
+  try {
 
-const submission =
-await Submission.findById(
-req.params.id
-);
+    const submission =
+      await Submission.findById(
+        req.params.id
+      );
 
-if(!submission){
+    if (!submission) {
 
-return res.status(404).json({
+      return res.status(404).json({
 
-message:"Submission not found"
+        message: "Submission not found"
 
-});
+      });
 
-}
-
-
-submission.grade =
-req.body.grade;
-
-submission.feedback =
-req.body.feedback;
-
-submission.status =
-"reviewed";
+    }
 
 
-await submission.save();
+    submission.grade =
+      req.body.grade;
+
+    submission.feedback =
+      req.body.feedback;
+
+    submission.status =
+      "reviewed";
 
 
-res.json({
+    await submission.save();
 
-message:"Submission graded",
 
-submission
+    res.json({
 
-});
+      message: "Submission graded",
 
-}
+      submission
 
-catch(error){
+    });
 
-res.status(500).json({
+  }
 
-message:error.message
+  catch (error) {
 
-});
+    res.status(500).json({
 
-}
+      message: error.message
+
+    });
+
+  }
 
 };
 
 // Get assignments
 export const getAssignments =
-async(req,res)=>{
+  async (req, res) => {
 
-try{
+    try {
 
-const assignments =
-await Assignment.find()
+      const assignments =
+        await Assignment.find()
 
-.populate({
+          .populate({
 
-path:"module",
-select:"title month"
+            path: "module",
+            select: "title month"
 
-});
+          });
 
-res.json(
-assignments
-);
+      res.json(
+        assignments
+      );
 
-}
+    }
 
-catch(error){
+    catch (error) {
 
-res.status(500).json({
+      res.status(500).json({
 
-message:error.message
+        message: error.message
 
-});
+      });
 
-}
+    }
 
-};
+  };

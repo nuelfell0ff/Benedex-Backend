@@ -1,5 +1,6 @@
 import Course from "../models/Course.js";
 import Progress from "../models/Progress.js";
+import { applyXpToUser, recordLearningActivity } from "../utils/studentLearning.js";
 
 
 
@@ -155,6 +156,15 @@ export const enrollCourse = async (req, res) => {
       course: course._id,
       completedModules: []
 
+    });
+
+    await applyXpToUser(req.user, 10);
+
+    await recordLearningActivity({
+      student: req.user._id,
+      type: "course_enrolled",
+      title: `Enrolled in ${course.title}`,
+      points: 10
     });
 
 

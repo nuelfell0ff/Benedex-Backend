@@ -1,123 +1,64 @@
 import User from "../models/User.js";
+import { applyXpToUser, recordLearningActivity } from "../utils/studentLearning.js";
 
 
 
-export const addXP = async(req,res)=>{
+export const addXP = async (req, res) => {
 
-try{
+  try {
 
-const {
+    const {
 
-studentId,
-xp
+      studentId,
+      xp
 
-}=req.body;
-
-
-const user = await User.findById(
-studentId
-);
+    } = req.body;
 
 
-if(!user){
-
-return res.status(404).json({
-
-message:"Student not found"
-
-});
-
-}
+    const user = await User.findById(studentId);
 
 
-user.xp += xp;
+    if (!user) {
+
+      return res.status(404).json({
+
+        message: "Student not found"
+
+      });
+
+    }
 
 
+    await applyXpToUser(user, xp);
 
-// Badge Logic
-
-if(
-user.xp >= 100 &&
-!user.badges.includes(
-"Beginner"
-)
-){
-
-user.badges.push(
-"Beginner"
-);
-
-}
+    await recordLearningActivity({
+      student: user._id,
+      type: "xp_awarded",
+      title: `XP awarded: ${xp}`,
+      points: xp
+    });
 
 
+    res.json({
 
-if(
-user.xp >= 300 &&
-!user.badges.includes(
-"Intermediate"
-)
-){
+      message: "XP updated",
 
-user.badges.push(
-"Intermediate"
-);
+      xp: user.xp,
 
-}
+      badges: user.badges
 
+    });
 
+  }
 
-if(
-user.xp >= 600 &&
-!user.badges.includes(
-"Advanced"
-)
-){
+  catch (error) {
 
-user.badges.push(
-"Advanced"
-);
+    res.status(500).json({
 
-}
+      message: error.message
 
+    });
 
-
-if(
-user.xp >= 1000 &&
-!user.badges.includes(
-"Expert"
-)
-){
-
-user.badges.push(
-"Expert"
-);
-
-}
-
-
-await user.save();
-
-
-res.json({
-
-message:"XP updated",
-
-xp:user.xp,
-
-badges:user.badges
-
-});
-
-}
-
-catch(error){
-
-res.status(500).json({
-
-message:error.message
-
-});
-
-}
+  }
 
 };
