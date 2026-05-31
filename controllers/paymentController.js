@@ -12,6 +12,14 @@ export const initializePayment = async (req, res) => {
 
   try {
 
+    // Ensure Paystack secret is configured
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey || paystackKey === "your_secret_key") {
+      console.error("PAYSTACK_SECRET_KEY is not set or is a placeholder.");
+      return res.status(500).json({
+        message: "Server misconfiguration: PAYSTACK_SECRET_KEY is not set. Please set it in the .env file."
+      });
+    }
     const course = await Course.findById(
       req.body.courseId
     );
@@ -29,37 +37,32 @@ export const initializePayment = async (req, res) => {
     const reference =
       "BEN_" + Date.now();
 
+    const callbackUrl = req.body.callbackUrl;
 
-    const response =
-      await axios.post(
 
-        "https://api.paystack.co/transaction/initialize",
+    const response = await axios.post(
 
-        {
+      "https://api.paystack.co/transaction/initialize",
 
-          email: req.user.email,
+      {
 
-          amount: course.price * 100,
+        email: req.user.email,
 
-          reference
+        amount: course.price * 100,
 
-        },
+        reference,
 
-        {
+        callback_url: callbackUrl
 
-          headers: {
+      },
 
-            Authorization:
-              `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-
-            "Content-Type":
-              "application/json"
-
-          }
-
+      {
+        headers: {
+          Authorization: `Bearer ${paystackKey}`,
+          "Content-Type": "application/json"
         }
-
-      );
+      }
+    );
 
 
 
@@ -74,24 +77,16 @@ export const initializePayment = async (req, res) => {
 
 
     res.json({
-
-      authorization_url:
-        response.data.data.authorization_url
-
+      authorization_url: response.data.data.authorization_url,
+      reference
     });
 
-  }
-
-  catch (error) {
-
+  } catch (error) {
+    console.error("Payment initialize error:", error.response?.data || error.message);
     res.status(500).json({
-
-      message: error.message
-
+      message: error.response?.data?.message || error.message || "Payment initialization failed"
     });
-
   }
-
 };
 
 
@@ -102,8 +97,16 @@ export const verifyPayment = async (req, res) => {
 
   try {
 
-    const reference =
-      req.params.reference;
+    // Ensure Paystack secret is configured
+    const paystackKey = process.env.PAYSTACK_SECRET_KEY;
+    if (!paystackKey || paystackKey === "your_secret_key") {
+      console.error("PAYSTACK_SECRET_KEY is not set or is a placeholder.");
+      return res.status(500).json({
+        message: "Server misconfiguration: PAYSTACK_SECRET_KEY is not set. Please set it in the .env file."
+      });
+    }
+
+    const reference = req.params.reference;
 
 
     const response =
@@ -112,14 +115,9 @@ export const verifyPayment = async (req, res) => {
         `https://api.paystack.co/transaction/verify/${reference}`,
 
         {
-
           headers: {
-
-            Authorization:
-              `Bearer ${process.env.PAYSTACK_SECRET_KEY}`
-
+            Authorization: `Bearer ${paystackKey}`
           }
-
         }
 
       );
@@ -132,6 +130,28 @@ export const verifyPayment = async (req, res) => {
         reference
 
       });
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment record not found in database."
+      });
+    }
+
+    if (payment.student.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "This payment does not belong to the authenticated user."
+      });
+    }
+
+    if (payment.status === "success") {
+      return res.json({
+        success: true,
+        courseId: payment.course,
+        message: "Payment already verified"
+      });
+    }
 
 
     if (
@@ -190,25 +210,29 @@ export const verifyPayment = async (req, res) => {
         });
       }
 
+      return res.json({
+        success: true,
+        courseId: payment.course,
+        message: "Payment verified and enrollment completed"
+      });
+
     }
 
+    payment.status = "failed";
+    await payment.save();
 
-    res.json({
 
-      message: "Payment verified"
-
+    // send structured response back to client with course id and success flag
+    res.status(400).json({
+      success: false,
+      courseId: payment.course,
+      message: "Paystack did not confirm this payment"
     });
 
-  }
-
-  catch (error) {
-
+  } catch (error) {
+    console.error("Payment verify error:", error.response?.data || error.message);
     res.status(500).json({
-
-      message: error.message
-
+      message: error.response?.data?.message || error.message || "Payment verification failed"
     });
-
   }
-
 };
