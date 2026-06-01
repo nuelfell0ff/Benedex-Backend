@@ -1,5 +1,6 @@
 import Assignment from "../models/Assignment.js";
 import Submission from "../models/Submission.js";
+import Course from "../models/Course.js";
 import cloudinary from "../config/cloudinary.js";
 
 import {
@@ -10,7 +11,7 @@ from "../utils/studentLearning.js";
 
 
 
-// Create Assignment
+// CREATE ASSIGNMENT
 
 export const createAssignment =
 async (req, res) => {
@@ -21,9 +22,15 @@ async (req, res) => {
       await Assignment.create({
 
         title: req.body.title,
-        description: req.body.description,
-        module: req.body.module,
-        dueDate: req.body.dueDate
+
+        description:
+          req.body.description,
+
+        module:
+          req.body.module,
+
+        dueDate:
+          req.body.dueDate
 
       });
 
@@ -37,7 +44,8 @@ async (req, res) => {
 
     res.status(500).json({
 
-      message: error.message
+      message:
+        error.message
 
     });
 
@@ -47,7 +55,7 @@ async (req, res) => {
 
 
 
-// Submit Assignment
+// SUBMIT ASSIGNMENT
 
 export const submitAssignment =
 async (req, res) => {
@@ -67,10 +75,68 @@ async (req, res) => {
 
 
 
+    const assignment =
+      await Assignment.findById(
+        req.body.assignment
+      )
+
+      .populate({
+
+        path: "module",
+
+        populate: {
+
+          path: "course"
+
+        }
+
+      });
+
+
+
+    if (!assignment) {
+
+      return res.status(404).json({
+
+        message:
+          "Assignment not found"
+
+      });
+
+    }
+
+
+
+    const enrolled =
+      assignment.module.course.students.some(
+
+        student =>
+
+          student.toString() ===
+          req.user._id.toString()
+
+      );
+
+
+
+    if (!enrolled) {
+
+      return res.status(403).json({
+
+        message:
+          "You are not enrolled in this course"
+
+      });
+
+    }
+
+
+
     const existingSubmission =
       await Submission.findOne({
 
-        student: req.user._id,
+        student:
+          req.user._id,
 
         assignment:
           req.body.assignment
@@ -103,11 +169,13 @@ async (req, res) => {
         fileBase64,
 
         {
+
           folder:
             "benedex-assignments",
 
           resource_type:
             "auto"
+
         }
 
       );
@@ -130,14 +198,6 @@ async (req, res) => {
 
 
 
-    const assignment =
-      await Assignment.findById(
-        req.body.assignment
-      )
-      .select("title");
-
-
-
     await applyXpToUser(
       req.user,
       25
@@ -154,7 +214,7 @@ async (req, res) => {
         "assignment_submitted",
 
       title:
-        `Submitted ${assignment?.title || "Assignment"}`,
+        `Submitted ${assignment.title}`,
 
       points:
         25
@@ -189,12 +249,72 @@ async (req, res) => {
 
 
 
-// Get Assignments
+// GET ASSIGNMENTS
 
 export const getAssignments =
 async (req, res) => {
 
   try {
+
+    // ADMIN & INSTRUCTOR
+
+    if (
+
+      req.user.role === "admin" ||
+
+      req.user.role === "instructor"
+
+    ) {
+
+      const assignments =
+        await Assignment.find()
+
+        .populate({
+
+          path: "module",
+
+          populate: {
+
+            path: "course",
+
+            select: "title"
+
+          }
+
+        });
+
+      return res.json(
+        assignments
+      );
+
+    }
+
+
+
+    // STUDENT
+
+    const enrolledCourses =
+      await Course.find({
+
+        students:
+          req.user._id
+
+      })
+
+      .select("_id");
+
+
+
+    const courseIds =
+      enrolledCourses.map(
+
+        course =>
+
+          course._id.toString()
+
+      );
+
+
 
     const assignments =
       await Assignment.find()
@@ -203,13 +323,43 @@ async (req, res) => {
 
         path: "module",
 
-        select:
-          "title month"
+        populate: {
+
+          path: "course",
+
+          select:
+            "title"
+
+        }
 
       });
 
+
+
+    const filteredAssignments =
+      assignments.filter(
+
+        assignment => {
+
+          const courseId =
+            assignment
+              ?.module
+              ?.course
+              ?._id
+              ?.toString();
+
+          return courseIds.includes(
+            courseId
+          );
+
+        }
+
+      );
+
+
+
     res.json(
-      assignments
+      filteredAssignments
     );
 
   }
@@ -229,7 +379,7 @@ async (req, res) => {
 
 
 
-// Student Submissions
+// GET MY SUBMISSIONS
 
 export const getMySubmissions =
 async (req, res) => {
@@ -246,12 +396,15 @@ async (req, res) => {
 
       .populate({
 
-        path: "assignment",
+        path:
+          "assignment",
 
         select:
           "title dueDate"
 
       });
+
+
 
     res.json(
       submissions
@@ -274,7 +427,7 @@ async (req, res) => {
 
 
 
-// Instructor/Admin
+// GET ALL SUBMISSIONS
 
 export const getSubmissions =
 async (req, res) => {
@@ -285,18 +438,24 @@ async (req, res) => {
       await Submission.find()
 
       .populate(
+
         "student",
+
         "fullName email"
+
       )
 
       .populate({
 
-        path: "assignment",
+        path:
+          "assignment",
 
         select:
           "title dueDate"
 
       });
+
+
 
     res.json(
       submissions
@@ -319,7 +478,7 @@ async (req, res) => {
 
 
 
-// Grade Submission
+// GRADE SUBMISSION
 
 export const gradeSubmission =
 async (req, res) => {
