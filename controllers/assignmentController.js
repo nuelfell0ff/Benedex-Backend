@@ -1,12 +1,19 @@
 import Assignment from "../models/Assignment.js";
 import Submission from "../models/Submission.js";
 import cloudinary from "../config/cloudinary.js";
-import { applyXpToUser, recordLearningActivity } from "../utils/studentLearning.js";
+
+import {
+  applyXpToUser,
+  recordLearningActivity
+}
+from "../utils/studentLearning.js";
 
 
 
 // Create Assignment
-export const createAssignment = async (req, res) => {
+
+export const createAssignment =
+async (req, res) => {
 
   try {
 
@@ -40,9 +47,10 @@ export const createAssignment = async (req, res) => {
 
 
 
-
 // Submit Assignment
-export const submitAssignment = async (req, res) => {
+
+export const submitAssignment =
+async (req, res) => {
 
   try {
 
@@ -50,7 +58,33 @@ export const submitAssignment = async (req, res) => {
 
       return res.status(400).json({
 
-        message: "No file uploaded"
+        message:
+          "No file uploaded"
+
+      });
+
+    }
+
+
+
+    const existingSubmission =
+      await Submission.findOne({
+
+        student: req.user._id,
+
+        assignment:
+          req.body.assignment
+
+      });
+
+
+
+    if (existingSubmission) {
+
+      return res.status(400).json({
+
+        message:
+          "You have already submitted this assignment"
 
       });
 
@@ -69,11 +103,11 @@ export const submitAssignment = async (req, res) => {
         fileBase64,
 
         {
+          folder:
+            "benedex-assignments",
 
-          folder: "benedex-assignments",
-
-          resource_type: "auto"
-
+          resource_type:
+            "auto"
         }
 
       );
@@ -83,30 +117,56 @@ export const submitAssignment = async (req, res) => {
     const submission =
       await Submission.create({
 
-        student: req.user._id,
+        student:
+          req.user._id,
 
-        assignment: req.body.assignment,
+        assignment:
+          req.body.assignment,
 
-        fileUrl: uploadedFile.secure_url
+        fileUrl:
+          uploadedFile.secure_url
 
       });
 
-    const assignment = await Assignment.findById(req.body.assignment).select("title");
 
-    await applyXpToUser(req.user, 25);
+
+    const assignment =
+      await Assignment.findById(
+        req.body.assignment
+      )
+      .select("title");
+
+
+
+    await applyXpToUser(
+      req.user,
+      25
+    );
+
+
 
     await recordLearningActivity({
-      student: req.user._id,
-      type: "assignment_submitted",
-      title: `Submitted ${assignment?.title || "Assignment"}`,
-      points: 25
+
+      student:
+        req.user._id,
+
+      type:
+        "assignment_submitted",
+
+      title:
+        `Submitted ${assignment?.title || "Assignment"}`,
+
+      points:
+        25
+
     });
 
 
 
     res.status(201).json({
 
-      message: "Assignment submitted",
+      message:
+        "Assignment submitted successfully",
 
       submission
 
@@ -118,7 +178,8 @@ export const submitAssignment = async (req, res) => {
 
     res.status(500).json({
 
-      message: error.message
+      message:
+        error.message
 
     });
 
@@ -127,27 +188,29 @@ export const submitAssignment = async (req, res) => {
 };
 
 
-// Get all submissions
-export const getSubmissions = async (req, res) => {
+
+// Get Assignments
+
+export const getAssignments =
+async (req, res) => {
 
   try {
 
-    const submissions =
-      await Submission.find()
+    const assignments =
+      await Assignment.find()
 
-        .populate(
-          "student",
-          "fullName email"
-        )
+      .populate({
 
-        .populate({
+        path: "module",
 
-          path: "assignment",
-          select: "title"
+        select:
+          "title month"
 
-        });
+      });
 
-    res.json(submissions);
+    res.json(
+      assignments
+    );
 
   }
 
@@ -155,7 +218,8 @@ export const getSubmissions = async (req, res) => {
 
     res.status(500).json({
 
-      message: error.message
+      message:
+        error.message
 
     });
 
@@ -165,9 +229,100 @@ export const getSubmissions = async (req, res) => {
 
 
 
+// Student Submissions
 
-// Grade submission
-export const gradeSubmission = async (req, res) => {
+export const getMySubmissions =
+async (req, res) => {
+
+  try {
+
+    const submissions =
+      await Submission.find({
+
+        student:
+          req.user._id
+
+      })
+
+      .populate({
+
+        path: "assignment",
+
+        select:
+          "title dueDate"
+
+      });
+
+    res.json(
+      submissions
+    );
+
+  }
+
+  catch (error) {
+
+    res.status(500).json({
+
+      message:
+        error.message
+
+    });
+
+  }
+
+};
+
+
+
+// Instructor/Admin
+
+export const getSubmissions =
+async (req, res) => {
+
+  try {
+
+    const submissions =
+      await Submission.find()
+
+      .populate(
+        "student",
+        "fullName email"
+      )
+
+      .populate({
+
+        path: "assignment",
+
+        select:
+          "title dueDate"
+
+      });
+
+    res.json(
+      submissions
+    );
+
+  }
+
+  catch (error) {
+
+    res.status(500).json({
+
+      message:
+        error.message
+
+    });
+
+  }
+
+};
+
+
+
+// Grade Submission
+
+export const gradeSubmission =
+async (req, res) => {
 
   try {
 
@@ -176,19 +331,25 @@ export const gradeSubmission = async (req, res) => {
         req.params.id
       );
 
+
+
     if (!submission) {
 
       return res.status(404).json({
 
-        message: "Submission not found"
+        message:
+          "Submission not found"
 
       });
 
     }
 
 
+
     submission.grade =
-      req.body.grade;
+      Number(
+        req.body.grade
+      );
 
     submission.feedback =
       req.body.feedback;
@@ -197,12 +358,15 @@ export const gradeSubmission = async (req, res) => {
       "reviewed";
 
 
+
     await submission.save();
+
 
 
     res.json({
 
-      message: "Submission graded",
+      message:
+        "Submission graded successfully",
 
       submission
 
@@ -214,44 +378,11 @@ export const gradeSubmission = async (req, res) => {
 
     res.status(500).json({
 
-      message: error.message
+      message:
+        error.message
 
     });
 
   }
 
 };
-
-// Get assignments
-export const getAssignments =
-  async (req, res) => {
-
-    try {
-
-      const assignments =
-        await Assignment.find()
-
-          .populate({
-
-            path: "module",
-            select: "title month"
-
-          });
-
-      res.json(
-        assignments
-      );
-
-    }
-
-    catch (error) {
-
-      res.status(500).json({
-
-        message: error.message
-
-      });
-
-    }
-
-  };
