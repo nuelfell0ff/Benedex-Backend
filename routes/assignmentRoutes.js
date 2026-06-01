@@ -2,21 +2,24 @@ import express from "express";
 
 import {
 
-createAssignment,
-submitAssignment,
-getSubmissions,
-gradeSubmission,
-getAssignments
+  createAssignment,
+  submitAssignment,
+  getAssignments,
+  getMySubmissions,
+  getSubmissions,
+  gradeSubmission
 
 }
+
 from "../controllers/assignmentController.js";
 
 import {
 
-protect,
-authorize
+  protect,
+  authorize
 
 }
+
 from "../middleware/authMiddleware.js";
 
 import upload from "../middleware/uploadMiddleware.js";
@@ -25,77 +28,102 @@ const router = express.Router();
 
 
 
-// Create assignment
+// Create Assignment
+
 router.post(
 
-"/",
+  "/",
 
-protect,
+  protect,
 
-authorize(
-"admin",
-"instructor"
-),
+  authorize(
+    "admin",
+    "instructor"
+  ),
 
-createAssignment
+  createAssignment
 
 );
 
 
 
-// Student upload assignment
+// Get Assignments
+
+router.get(
+
+  "/",
+
+  protect,
+
+  getAssignments
+
+);
+
+
+
+// Student Submission History
+
+router.get(
+
+  "/my-submissions",
+
+  protect,
+
+  getMySubmissions
+
+);
+
+
+
+// Submit Assignment
+
 router.post(
 
-"/submit",
+  "/submit",
 
-protect,
+  protect,
 
-upload.single("file"),
+  upload.single("file"),
 
-submitAssignment
+  submitAssignment
 
 );
+
+
+
+// Instructor/Admin View
 
 router.get(
-"/",
-protect,
-getAssignments
-);
 
+  "/submissions",
 
+  protect,
 
-// Get all submissions
-router.get(
+  authorize(
+    "admin",
+    "instructor"
+  ),
 
-"/submissions",
-
-protect,
-
-authorize(
-"admin",
-"instructor"
-),
-
-getSubmissions
+  getSubmissions
 
 );
 
 
 
+// Grade Submission
 
-// Grade submission
 router.put(
 
-"/grade/:id",
+  "/grade/:id",
 
-protect,
+  protect,
 
-authorize(
-"admin",
-"instructor"
-),
+  authorize(
+    "admin",
+    "instructor"
+  ),
 
-gradeSubmission
+  gradeSubmission
 
 );
 
