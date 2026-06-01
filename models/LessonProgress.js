@@ -1,30 +1,30 @@
 import mongoose from "mongoose";
 
-const lessonProgressSchema =
-new mongoose.Schema({
+const lessonProgressSchema = new mongoose.Schema(
+  {
+    student: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
 
-  student:{
-    type:mongoose.Schema.Types.ObjectId,
-    ref:"User"
+    lesson: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Lesson",
+      required: true
+    },
+
+    completed: {
+      type: Boolean,
+      default: false
+    }
   },
-
-  lesson:{
-    type:mongoose.Schema.Types.ObjectId,
-    ref:"Lesson"
-  },
-
-  completed:{
-    type:Boolean,
-    default:false
+  {
+    timestamps: true
   }
+);
 
-},
-{
-  timestamps:true
-});
-
-const LessonProgress =
-mongoose.model(
+const LessonProgress = mongoose.model(
   "LessonProgress",
   lessonProgressSchema
 );
