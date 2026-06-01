@@ -2,19 +2,21 @@ import express from "express";
 
 import {
 
-createLiveClass,
-getCourseLiveClasses
+  createLiveClass,
+  getCourseLiveClasses,
+  getStudentLiveClasses,
+  joinLiveClass
 
 }
-from "../controllers/liveClassController.js";
+  from "../controllers/liveClassController.js";
 
 import {
 
-protect,
-authorize
+  protect,
+  authorize
 
 }
-from "../middleware/authMiddleware.js";
+  from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -23,16 +25,16 @@ const router = express.Router();
 // Create class
 router.post(
 
-"/",
+  "/",
 
-protect,
+  protect,
 
-authorize(
-"admin",
-"instructor"
-),
+  authorize(
+    "admin",
+    "instructor"
+  ),
 
-createLiveClass
+  createLiveClass
 
 );
 
@@ -40,12 +42,28 @@ createLiveClass
 
 // Get class list
 router.get(
+  "/student",
+  protect,
+  authorize("student"),
+  getStudentLiveClasses
+);
 
-"/:courseId",
+// Join class
+router.post(
+  "/join/:classId",
+  protect,
+  authorize("student"),
+  joinLiveClass
+);
 
-protect,
+// Get class list by course
+router.get(
 
-getCourseLiveClasses
+  "/:courseId",
+
+  protect,
+
+  getCourseLiveClasses
 
 );
 

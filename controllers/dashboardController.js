@@ -64,9 +64,18 @@ export const getStudentDashboard =
       const activityHistory = await LearningActivity.find({
         student: req.user._id
       })
+        .select("type title points createdAt")
         .sort({
           createdAt: -1
         });
+
+      const recentActivities = activityHistory.slice(0, 20).map((item) => ({
+        _id: item._id,
+        type: item.type,
+        title: item.title,
+        points: item.points || 0,
+        createdAt: item.createdAt
+      }));
 
       const fallbackActivityHistory = [
         ...progress.map((item) => ({
@@ -109,7 +118,8 @@ export const getStudentDashboard =
 
         submissions
 
-        , learningSummary
+        , learningSummary,
+        recentActivities
 
       });
 

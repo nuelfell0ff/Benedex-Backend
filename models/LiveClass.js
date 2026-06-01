@@ -2,55 +2,62 @@ import mongoose from "mongoose";
 
 const liveClassSchema = new mongoose.Schema({
 
-    title:{
-        type:String,
-        required:true
+    title: {
+        type: String,
+        required: true
     },
 
-    description:{
-        type:String,
-        default:""
+    description: {
+        type: String,
+        default: ""
     },
 
-    course:{
-        type:mongoose.Schema.Types.ObjectId,
-        ref:"Course",
-        required:true
+    course: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Course",
+        required: true
     },
 
-    instructor:{
-        type:mongoose.Schema.Types.ObjectId,
-        ref:"User"
+    instructor: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
     },
 
-    meetingLink:{
-        type:String,
-        required:true
+    meetingLink: {
+        type: String,
+        required: true
     },
 
-    platform:{
-        type:String,
-        enum:[
+    platform: {
+        type: String,
+        enum: [
             "zoom",
             "google-meet"
         ],
-        default:"zoom"
+        default: "zoom"
     },
 
-    startTime:{
-        type:Date,
-        required:true
+    startTime: {
+        type: Date,
+        required: true
     },
 
-    endTime:{
-        type:Date,
-        required:true
-    }
+    endTime: {
+        type: Date,
+        required: true
+    },
+
+    attendees: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User"
+        }
+    ]
 
 },
-{
-    timestamps:true
-});
+    {
+        timestamps: true
+    });
 
 const LiveClass = mongoose.model(
     "LiveClass",

@@ -2,34 +2,36 @@ import Module from "../models/Module.js";
 import Progress from "../models/Progress.js";
 import Assignment from "../models/Assignment.js";
 import Submission from "../models/Submission.js";
+import Course from "../models/Course.js";
+import { recordLearningActivity } from "../utils/studentLearning.js";
 
 
 // Create module
-export const createModule = async(req,res)=>{
+export const createModule = async (req, res) => {
 
-try{
+  try {
 
-const moduleData = await Module.create({
+    const moduleData = await Module.create({
 
-title:req.body.title,
-description:req.body.description,
-course:req.body.course,
-month:req.body.month,
-order:req.body.order,
-content:req.body.content
+      title: req.body.title,
+      description: req.body.description,
+      course: req.body.course,
+      month: req.body.month,
+      order: req.body.order,
+      content: req.body.content
 
-});
+    });
 
-res.status(201).json(moduleData);
+    res.status(201).json(moduleData);
 
-}
-catch(error){
+  }
+  catch (error) {
 
-res.status(500).json({
-message:error.message
-});
+    res.status(500).json({
+      message: error.message
+    });
 
-}
+  }
 
 };
 
@@ -37,31 +39,31 @@ message:error.message
 
 
 // Get all modules
-export const getAllModules = async(req,res)=>{
+export const getAllModules = async (req, res) => {
 
-try{
+  try {
 
-const modules = await Module.find()
-.populate(
-"course",
-"title"
-)
-.sort({
-month:1,
-order:1
-});
+    const modules = await Module.find()
+      .populate(
+        "course",
+        "title"
+      )
+      .sort({
+        month: 1,
+        order: 1
+      });
 
-res.json(modules);
+    res.json(modules);
 
-}
+  }
 
-catch(error){
+  catch (error) {
 
-res.status(500).json({
-message:error.message
-});
+    res.status(500).json({
+      message: error.message
+    });
 
-}
+  }
 
 };
 
@@ -69,150 +71,160 @@ message:error.message
 
 
 // Drip-content logic using assignment completion
-export const getCourseModules = async(req,res)=>{
+export const getCourseModules = async (req, res) => {
 
-try{
+  try {
 
-const modules = await Module.find({
+    const modules = await Module.find({
 
-course:req.params.courseId
+      course: req.params.courseId
 
-})
-.sort({
+    })
+      .sort({
 
-month:1,
-order:1
+        month: 1,
+        order: 1
 
-});
+      });
 
 
 
-const assignments =
-await Assignment.find()
+    const assignments =
+      await Assignment.find()
 
-.populate(
-"module"
-);
+        .populate(
+          "module"
+        );
 
 
 
-const submissions =
-await Submission.find({
+    const submissions =
+      await Submission.find({
 
-student:req.user._id
+        student: req.user._id
 
-});
+      });
 
 
 
-let unlockedMonth = 1;
+    let unlockedMonth = 1;
 
 
 
-const submittedAssignmentIds =
-submissions.map(
+    const submittedAssignmentIds =
+      submissions.map(
 
-submission =>
+        submission =>
 
-submission.assignment.toString()
+          submission.assignment.toString()
 
-);
+      );
 
 
 
-// Month 1 assignments
-const monthOneAssignments =
-assignments.filter(
+    // Month 1 assignments
+    const monthOneAssignments =
+      assignments.filter(
 
-assignment =>
+        assignment =>
 
-assignment.module &&
-assignment.module.month === 1
+          assignment.module &&
+          assignment.module.month === 1
 
-);
+      );
 
 
-// Month 2 assignments
-const monthTwoAssignments =
-assignments.filter(
+    // Month 2 assignments
+    const monthTwoAssignments =
+      assignments.filter(
 
-assignment =>
+        assignment =>
 
-assignment.module &&
-assignment.module.month === 2
+          assignment.module &&
+          assignment.module.month === 2
 
-);
+      );
 
 
 
-// Unlock month 2
-if(
+    // Unlock month 2
+    if (
 
-monthOneAssignments.length > 0 &&
+      monthOneAssignments.length > 0 &&
 
-monthOneAssignments.every(
+      monthOneAssignments.every(
 
-assignment =>
+        assignment =>
 
-submittedAssignmentIds.includes(
-assignment._id.toString()
-)
+          submittedAssignmentIds.includes(
+            assignment._id.toString()
+          )
 
-)
+      )
 
-){
+    ) {
 
-unlockedMonth = 2;
+      unlockedMonth = 2;
 
-}
+    }
 
 
 
-// Unlock month 3
-if(
+    // Unlock month 3
+    if (
 
-monthTwoAssignments.length > 0 &&
+      monthTwoAssignments.length > 0 &&
 
-monthTwoAssignments.every(
+      monthTwoAssignments.every(
 
-assignment =>
+        assignment =>
 
-submittedAssignmentIds.includes(
-assignment._id.toString()
-)
+          submittedAssignmentIds.includes(
+            assignment._id.toString()
+          )
 
-)
+      )
 
-){
+    ) {
 
-unlockedMonth = 3;
+      unlockedMonth = 3;
 
-}
+    }
 
 
 
-const filteredModules =
-modules.filter(
+    const filteredModules =
+      modules.filter(
 
-module =>
+        module =>
 
-module.month <= unlockedMonth
+          module.month <= unlockedMonth
 
-);
+      );
 
+    if (filteredModules.length > 0) {
+      const course = await Course.findById(req.params.courseId).select("title");
+      await recordLearningActivity({
+        student: req.user._id,
+        type: "lesson_started",
+        title: `Started lesson in ${course?.title || "a course"}`,
+        points: 0
+      });
+    }
 
 
-res.json(filteredModules);
 
-}
-catch(error){
+    res.json(filteredModules);
 
-res.status(500).json({
+  }
+  catch (error) {
 
-message:error.message
+    res.status(500).json({
 
-});
+      message: error.message
 
-}
+    });
+
+  }
 
 };

@@ -9,7 +9,16 @@ const learningActivitySchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["course_enrolled", "assignment_submitted", "xp_awarded", "module_completed"],
+      enum: [
+        "account_registered",
+        "user_logged_in",
+        "course_enrolled",
+        "assignment_submitted",
+        "module_completed",
+        "lesson_started",
+        "live_class_joined",
+        "xp_awarded",
+      ],
       required: true,
     },
     title: {
