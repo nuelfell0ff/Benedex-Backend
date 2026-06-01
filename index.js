@@ -24,6 +24,7 @@ import settingsRoutes from "./routes/settingsRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import errorHandler from "./middleware/errorMiddleware.js";
 import notFound from "./middleware/notFoundMiddleware.js";
+import lessonRoutes from "./routes/lessonRoutes.js";
 
 dotenv.config();
 
@@ -162,6 +163,8 @@ app.use(
 app.use(
     errorHandler
 );
+
+app.use("/api/lessons", lessonRoutes);
 
 
 // Home route
