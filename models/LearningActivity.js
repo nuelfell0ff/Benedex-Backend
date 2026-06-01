@@ -29,6 +29,10 @@ const learningActivitySchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    isViewed: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

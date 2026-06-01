@@ -2,6 +2,7 @@ import express from "express";
 
 import {
   studentDashboard,
+  clearStudentActivityViews,
   adminDashboard
 }
   from "../controllers/studentController.js";
@@ -19,6 +20,13 @@ router.get(
   "/dashboard",
   protect,
   studentDashboard
+);
+
+router.put(
+  "/dashboard/activities/viewed",
+  protect,
+  authorize("student"),
+  clearStudentActivityViews
 );
 
 

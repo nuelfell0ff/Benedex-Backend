@@ -67,6 +67,7 @@ export const recordLearningActivity = async ({
     type,
     title,
     points,
+    isViewed: false,
     createdAt: occurredAt,
     updatedAt: occurredAt,
   });
