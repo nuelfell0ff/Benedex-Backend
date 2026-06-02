@@ -79,9 +79,9 @@ export const completeLesson = async (req, res) => {
       progress
     });
   } catch (error) {
-    res.status(500).json({
-      message: error.message
-    });
+  console.log(error.response?.data);
+  console.log(error);
+}
   }
 };
 
