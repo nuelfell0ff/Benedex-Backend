@@ -25,6 +25,7 @@ import messageRoutes from "./routes/messageRoutes.js";
 import errorHandler from "./middleware/errorMiddleware.js";
 import notFound from "./middleware/notFoundMiddleware.js";
 import lessonRoutes from "./routes/lessonRoutes.js";
+import quizRoutes from "./routes/quizRoutes.js";
 
 dotenv.config();
 
@@ -165,6 +166,11 @@ app.use(
 );
 
 app.use("/api/lessons", lessonRoutes);
+
+app.use(
+"/api/quizzes",
+quizRoutes
+);
 
 
 // Home route
