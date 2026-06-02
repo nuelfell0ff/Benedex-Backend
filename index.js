@@ -155,6 +155,16 @@ app.use(
     messageRoutes
 );
 
+app.use(
+    "/api/lessons", 
+    lessonRoutes
+);
+
+app.use(
+"/api/quizzes",
+quizRoutes
+);
+
 
 
 app.use(
@@ -163,13 +173,6 @@ app.use(
 
 app.use(
     errorHandler
-);
-
-app.use("/api/lessons", lessonRoutes);
-
-app.use(
-"/api/quizzes",
-quizRoutes
 );
 
 
