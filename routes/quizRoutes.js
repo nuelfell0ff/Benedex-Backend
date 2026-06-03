@@ -1,54 +1,47 @@
 import express from "express";
 
 import {
-
-createQuiz,
-getModuleQuiz,
-submitQuiz
-
-}
-from "../controllers/quizController.js";
+  createQuiz,
+  getModuleQuiz,
+  getQuizById,
+  submitQuiz,
+} from "../controllers/quizController.js";
 
 import {
+  protect,
+  authorize,
+} from "../middleware/authMiddleware.js";
 
-protect,
-authorize
+const router = express.Router();
 
-}
-from "../middleware/authMiddleware.js";
-
-const router =
-express.Router();
-
-
-// Create Quiz
+/* CREATE */
 router.post(
-"/",
-protect,
-authorize(
-"admin",
-"instructor"
-),
-createQuiz
+  "/",
+  protect,
+  authorize("admin", "instructor"),
+  createQuiz
 );
 
-
-// Get Quiz
+/* GET BY MODULE */
 router.get(
-"/module/:moduleId",
-protect,
-getModuleQuiz
+  "/module/:moduleId",
+  protect,
+  getModuleQuiz
 );
 
+/* GET BY QUIZ ID */
+router.get(
+  "/:quizId",
+  protect,
+  getQuizById
+);
 
-// Submit Quiz
+/* SUBMIT */
 router.post(
-"/submit/:quizId",
-protect,
-authorize(
-"student"
-),
-submitQuiz
+  "/submit/:quizId",
+  protect,
+  authorize("student"),
+  submitQuiz
 );
 
 export default router;
