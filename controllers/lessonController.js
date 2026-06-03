@@ -82,7 +82,6 @@ export const completeLesson = async (req, res) => {
   console.log(error.response?.data);
   console.log(error);
 }
-  }
 };
 
 
