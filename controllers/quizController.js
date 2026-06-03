@@ -1,156 +1,117 @@
 import Quiz from "../models/Quiz.js";
 import QuizAttempt from "../models/QuizAttempt.js";
 
+/* CREATE QUIZ */
+export const createQuiz = async (req, res) => {
+  try {
+    const quiz = await Quiz.create({
+      title: req.body.title,
+      description: req.body.description,
+      module: req.body.module,
+      passMark: req.body.passMark || 70,
+      questions: req.body.questions || [],
+    });
 
-
-// Create Quiz
-export const createQuiz =
-async(req,res)=>{
-
-try{
-
-const quiz =
-await Quiz.create({
-
-title:req.body.title,
-description:req.body.description,
-module:req.body.module,
-passMark:req.body.passMark,
-questions:req.body.questions
-
-});
-
-res.status(201).json(
-quiz
-);
-
-}
-catch(error){
-
-res.status(500).json({
-message:error.message
-});
-
-}
-
+    res.status(201).json(quiz);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
 };
 
+/* GET QUIZ BY MODULE */
+export const getModuleQuiz = async (req, res) => {
+  try {
+    const quiz = await Quiz.findOne({
+      module: req.params.moduleId,
+    });
 
+    if (!quiz) {
+      return res.status(404).json({
+        message: "Quiz not found",
+      });
+    }
 
-
-// Get module quiz
-export const getModuleQuiz =
-async(req,res)=>{
-
-try{
-
-const quiz =
-await Quiz.findOne({
-
-module:req.params.moduleId
-
-});
-
-res.json(
-quiz
-);
-
-}
-catch(error){
-
-res.status(500).json({
-message:error.message
-});
-
-}
-
+    res.json(quiz);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
 };
 
+/* GET QUIZ BY ID */
+export const getQuizById = async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(
+      req.params.quizId
+    );
 
+    if (!quiz) {
+      return res.status(404).json({
+        message: "Quiz not found",
+      });
+    }
 
+    res.json(quiz);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
 
-// Submit Quiz
-export const submitQuiz =
-async(req,res)=>{
+/* SUBMIT QUIZ */
+export const submitQuiz = async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(
+      req.params.quizId
+    );
 
-try{
+    if (!quiz) {
+      return res.status(404).json({
+        message: "Quiz not found",
+      });
+    }
 
-const quiz =
-await Quiz.findById(
-req.params.quizId
-);
+    const answers = req.body.answers || {};
 
-if(!quiz){
+    let correct = 0;
 
-return res.status(404).json({
-message:"Quiz not found"
-});
+    quiz.questions.forEach((q, index) => {
+      if (
+        answers[index] === q.correctAnswer
+      ) {
+        correct++;
+      }
+    });
 
-}
+    const percentage = Math.round(
+      (correct / quiz.questions.length) * 100
+    );
 
-let score = 0;
+    const passed =
+      percentage >= quiz.passMark;
 
-quiz.questions.forEach(
+    const attempt =
+      await QuizAttempt.create({
+        student: req.user._id,
+        quiz: quiz._id,
+        score: percentage,
+        passed,
+      });
 
-(question,index)=>{
-
-if(
-
-req.body.answers[index] ===
-
-question.correctAnswer
-
-){
-
-score++;
-
-}
-
-}
-
-);
-
-const percentage =
-Math.round(
-(score /
-quiz.questions.length)
-*100
-);
-
-const passed =
-percentage >=
-quiz.passMark;
-
-const attempt =
-await QuizAttempt.create({
-
-student:req.user._id,
-
-quiz:quiz._id,
-
-score:percentage,
-
-passed
-
-});
-
-res.json({
-
-score:percentage,
-
-passed,
-
-attempt
-
-});
-
-}
-catch(error){
-
-res.status(500).json({
-message:error.message
-});
-
-}
-
+    res.json({
+      score: percentage,
+      correct,
+      total: quiz.questions.length,
+      passed,
+      attempt,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
 };
