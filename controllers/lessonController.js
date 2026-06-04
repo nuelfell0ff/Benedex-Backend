@@ -86,16 +86,32 @@ export const completeLesson = async (req, res) => {
 
 
 // GET PROGRESS FOR MODULE
-export const getLessonProgress = async (req, res) => {
+export const getLessonProgress = async (
+  req,
+  res
+) => {
+
   try {
-    const progress = await LessonProgress.find({
-      student: req.user._id
-    });
+
+    const progress =
+      await LessonProgress.find({
+        student: req.user._id
+      })
+      .populate("lesson");
+
+    console.log(
+      "Progress sent:",
+      progress
+    );
 
     res.json(progress);
+
   } catch (error) {
+
     res.status(500).json({
       message: error.message
     });
+
   }
+
 };
