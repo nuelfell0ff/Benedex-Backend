@@ -54,10 +54,11 @@ export const completeLesson = async (req, res) => {
     });
 
     if (existing) {
-      return res.status(400).json({
-        message: "Lesson already completed"
-      });
-    }
+  return res.status(200).json({
+    message: "Lesson already completed",
+    progress: existing
+  });
+}
 
     const progress = await LessonProgress.create({
       student: req.user._id,
