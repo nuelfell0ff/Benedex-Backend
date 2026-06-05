@@ -189,3 +189,19 @@ export const enrollCourse = async (req, res) => {
   }
 
 };
+
+// Add this to your backend course controller
+export const getStudentCourses = async (req, res) => {
+  try {
+    // Find all courses where the student's ID exists in the 'students' array
+    const enrolledCourses = await Course.find({ 
+      students: req.user._id 
+    })
+    .populate("instructor", "fullName profileImage role") // Fetch the instructor's user details
+    .select("title instructor"); // Only grab what the front-end chat needs
+
+    res.status(200).json(enrolledCourses);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
