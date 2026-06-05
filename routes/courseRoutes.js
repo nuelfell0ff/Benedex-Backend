@@ -1,71 +1,32 @@
 import express from "express";
-
 import {
-
-createCourse,
-getCourses,
-getSingleCourse,
-enrollCourse,
-getStudentCourses,
-
-}
-from "../controllers/courseController.js";
-
-import {
-
-protect,
-authorize
-
-}
-from "../middleware/authMiddleware.js";
+  createCourse,
+  getCourses,
+  getSingleCourse,
+  enrollCourse,
+  getStudentCourses,
+  getInstructorCourses // Imported the new function here
+} from "../controllers/courseController.js";
+import { protect, authorize } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-
 // Create Course
-router.post(
-"/",
-protect,
-authorize(
-"admin",
-"instructor"
-),
-createCourse
-);
-
+router.post("/", protect, authorize("admin", "instructor"), createCourse);
 
 // Get all courses
-router.get(
-"/",
-getCourses
-);
-
+router.get("/", getCourses);
 
 // Get single course
-router.get(
-"/:id",
-getSingleCourse
-);
-
+router.get("/:id", getSingleCourse);
 
 // Student enroll
-router.post(
-"/enroll/:courseId",
-protect,
-authorize(
-"student"
-),
-enrollCourse
-);
+router.post("/enroll/:courseId", protect, authorize("student"), enrollCourse);
 
-// get student courses
-router.get(
-    "/student/registered", 
-    protect, 
-    authorize(
-        "student"
-    ),
-    getStudentCourses);
+// Get student courses
+router.get("/student/registered", protect, authorize("student"), getStudentCourses);
 
+// NEW: Get instructor courses roster mapping route
+router.get("/instructor/my-courses", protect, authorize("instructor"), getInstructorCourses);
 
 export default router;
