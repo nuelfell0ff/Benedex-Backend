@@ -120,13 +120,12 @@ export const submitQuiz = async (req, res) => {
 /* GET STUDENT QUIZZES PROGRESS */
 export const getQuizProgress = async (req, res) => {
   try {
-    // Find all attempts by this student where they successfully passed
-    const passedAttempts = await QuizAttempt.find({
+    // REMOVED ".select('quiz passed')" restriction so the score property actually reaches your UI
+    const allAttempts = await QuizAttempt.find({
       student: req.user._id,
-      passed: true
-    }).select("quiz passed"); // Optimization: only fetch fields we need
+    }); 
 
-    res.json(passedAttempts);
+    res.json(allAttempts);
   } catch (error) {
     res.status(500).json({
       message: error.message,
