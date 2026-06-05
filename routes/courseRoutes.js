@@ -5,7 +5,8 @@ import {
 createCourse,
 getCourses,
 getSingleCourse,
-enrollCourse
+enrollCourse,
+getStudentCourses,
 
 }
 from "../controllers/courseController.js";
@@ -56,6 +57,15 @@ authorize(
 ),
 enrollCourse
 );
+
+// get student courses
+router.get(
+    "/student/registered", 
+    protect, 
+    authorize(
+        "student"
+    ),
+    getStudentCourses);
 
 
 export default router;
