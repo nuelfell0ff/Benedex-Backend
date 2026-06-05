@@ -115,3 +115,21 @@ export const submitQuiz = async (req, res) => {
     });
   }
 };
+
+
+/* GET STUDENT QUIZZES PROGRESS */
+export const getQuizProgress = async (req, res) => {
+  try {
+    // Find all attempts by this student where they successfully passed
+    const passedAttempts = await QuizAttempt.find({
+      student: req.user._id,
+      passed: true
+    }).select("quiz passed"); // Optimization: only fetch fields we need
+
+    res.json(passedAttempts);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
