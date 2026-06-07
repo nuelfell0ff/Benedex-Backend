@@ -136,3 +136,95 @@ export const getStudentDashboard =
     }
 
   };
+
+// @desc    Get instructor dashboard metric cards overview
+// @route   GET /api/dashboard/analytics/overview
+// @access  Private (Instructor only)
+export const getInstructorOverview = async (req, res) => {
+  try {
+    // In production: calculate via DB aggregations using req.user._id
+    res.status(200).json({
+      totalStudents: 1240,
+      completionRate: 78,
+      pendingGrading: 14,
+      activeCourses: 3
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+// @desc    Get instructor courses and active grading work items
+// @route   GET /api/dashboard/courses
+// @access  Private (Instructor only)
+export const getInstructorCourses = async (req, res) => {
+  try {
+    res.status(200).json([
+      {
+        id: "cpe-308",
+        title: "CPE308: Assembly Language Programming & Computer Architecture",
+        studentsCount: 420,
+        modulesCount: 8,
+        completionRate: 82,
+        pendingTasks: [
+          {
+            submissionId: "sub-101",
+            taskName: "Assembly Lab 3: Cache Mapping",
+            courseCode: "CPE308",
+            submittedAt: "8h ago"
+          }
+        ]
+      },
+      {
+        id: "fe-react",
+        title: "Advanced Frontend Engineering with React & Framer Motion",
+        studentsCount: 680,
+        modulesCount: 12,
+        completionRate: 74,
+        pendingTasks: [
+          {
+            submissionId: "sub-102",
+            taskName: "Framer Motion Micro-Interactions",
+            courseCode: "FE-React",
+            submittedAt: "14h ago"
+          }
+        ]
+      }
+    ]);
+  } catch (error) {
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+// @desc    Get weekly telemetry engagement data numbers array
+// @route   GET /api/dashboard/analytics/weekly-engagement
+// @access  Private (Instructor only)
+export const getInstructorEngagement = async (req, res) => {
+  try {
+    res.status(200).json([45, 62, 58, 84, 76, 92, 88]);
+  } catch (error) {
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+// @desc    Get drop-off metrics warnings for students at risk
+// @route   GET /api/dashboard/analytics/students-at-risk
+// @access  Private (Instructor only)
+export const getInstructorAtRisk = async (req, res) => {
+  try {
+    res.status(200).json([
+      {
+        studentName: "Emmanuel N.",
+        lastActiveWindow: "3 days ago",
+        performanceDropPercentage: 24
+      },
+      {
+        studentName: "Marcus V.",
+        lastActiveWindow: "5 days ago",
+        performanceDropPercentage: 18
+      }
+    ]);
+  } catch (error) {
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
