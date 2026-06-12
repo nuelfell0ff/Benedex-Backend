@@ -1,8 +1,9 @@
 // routes/instructor.js
-const express = require("express");
+import express from "express";
+import { getInstructorDashboardTelemetry } from "../controllers/instructorController.js";
+import { protect, authorize } from "../middleware/auth.js"; // Ensure .js is present on local files
+
 const router = express.Router();
-const { getInstructorDashboardTelemetry } = require("../controllers/instructorController");
-const { protect, authorize } = require("../middleware/auth"); // Your custom JWT protection layers
 
 // Bind the consolidated analytics bundle under strict role-based firewalls
 router.get(
@@ -12,4 +13,4 @@ router.get(
   getInstructorDashboardTelemetry
 );
 
-module.exports = router;
+export default router;
