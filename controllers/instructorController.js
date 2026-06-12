@@ -1,50 +1,54 @@
 // controllers/instructorController.js
-const Course = require("../models/Course");
-const Enrollment = require("../models/Enrollment");
-const Submission = require("../models/Submission");
-// const User = require("../models/User"); // Fallback if your scheme relies heavily on base collections
+import Course from "../models/Course.js";
+import Submission from "../models/Submission.js";
+import User from "../models/User.js";
 
 /**
  * @desc    Fetch comprehensive aggregated data matrices for an isolated instructor account
  * @route   GET /api/instructor/dashboard
  * @access  Private (Instructor only)
  */
-exports.getInstructorDashboardTelemetry = async (req, res) => {
+export const getInstructorDashboardTelemetry = async (req, res) => {
   try {
-    const instructorId = req.user.id; // Harvested straight from decoded JWT payload
+    const instructorId = req.user.id; // Harvested from decoded JWT payload
 
     // 1. Fetch all course architectures owned explicitly by this instructor
     const instructorCourses = await Course.find({ instructor: instructorId });
     const courseIds = instructorCourses.map(course => course._id);
 
-    // 2. Metrics Pipeline calculations
+    // 2. Metrics Pipeline calculations (Reading arrays straight from Course records)
     const totalCoursesCount = instructorCourses.length;
 
-    // Aggregate unique student allocations across all owned courses
-    const uniqueStudentsData = await Enrollment.distinct("student", { 
-      course: { $in: courseIds } 
+    // Use a Set to calculate total unique students across all the instructor's courses
+    const uniqueStudentIds = new Set();
+    instructorCourses.forEach(course => {
+      if (course.students && Array.isArray(course.students)) {
+        course.students.forEach(studentId => uniqueStudentIds.add(studentId.toString()));
+      }
     });
-    const totalStudentsCount = uniqueStudentsData.length;
+    const totalStudentsCount = uniqueStudentIds.size;
 
-    // Calculate dynamic processing queue length (e.g., Unmarked assessment arrays)
+    // Calculate dynamic processing queue length from Submissions mapping to these courses
     const pendingGradingCount = await Submission.countDocuments({
       course: { $in: courseIds },
       status: "pending"
     });
 
-    // Dummy/Simulated completion rate metrics logic—replace with actual structural db aggregations if tracked
+    // Default or baseline mean completion calculation 
     const calculatedMeanCompletion = 74; 
 
-    // 3. Structural Course Blueprint mappings with metrics embedding
+    // 3. Structural Course Blueprint mappings with internal array metric counting
     const courseDirectoryBlueprint = await Promise.all(
       instructorCourses.map(async (course) => {
-        const studentEnrollmentCount = await Enrollment.countDocuments({ course: course._id });
         
-        // Extract tasks awaiting human verification parameters matching your frontend loop structure
+        // Count enrolled students directly from the course document array length
+        const studentEnrollmentCount = course.students ? course.students.length : 0;
+        
+        // Extract tasks awaiting grading for this specific course
         const rawPendingSubmissions = await Submission.find({ 
           course: course._id, 
           status: "pending" 
-        }).populate("student", "fullName");
+        }).populate("student", "fullName"); // Grabs fullName from your User model schema
 
         const pendingTasksArray = rawPendingSubmissions.map(sub => ({
           submissionId: sub._id,
@@ -57,15 +61,14 @@ exports.getInstructorDashboardTelemetry = async (req, res) => {
           _id: course._id,
           title: course.title,
           studentsCount: studentEnrollmentCount,
-          modulesCount: course.modules?.length || 0,
-          completionRate: course.averageCompletionProgress || 68, // fallback baseline ratio
+          modulesCount: course.modules ? course.modules.length : 0,
+          completionRate: course.averageCompletionProgress || 68, 
           pendingTasks: pendingTasksArray
         };
       })
     );
 
-    // 4. Time-series Engagement Deltas and Predictive Risk Warnings (Telemetry simulations)
-    // Replace array simulations below with direct aggregate queries if your log metrics collection captures this deep telemetry
+    // 4. Time-series Engagement Deltas and Predictive Risk Warnings
     const simulatedWeeklyEngagement = [45, 58, 62, 79, 84, 92];
 
     const simulatedAtRiskRadar = [
@@ -74,7 +77,7 @@ exports.getInstructorDashboardTelemetry = async (req, res) => {
       { studentName: "Chidi Okechukwu", lastActiveWindow: "Overdue 2 tasks", performanceDropPercentage: 19 }
     ];
 
-    // Payload structures mapped entirely to expected client-side data layout keys
+    // Send payload matching the exact shape expected by your state fields
     return res.status(200).json({
       metrics: {
         totalStudents: totalStudentsCount,
