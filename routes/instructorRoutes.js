@@ -1,7 +1,7 @@
 // routes/instructor.js
 import express from "express";
 import { getInstructorDashboardTelemetry } from "../controllers/instructorController.js";
-import { protect, authorize } from "../middleware/auth.js"; // Ensure .js is present on local files
+import { protect, authorize } from "../middleware/authMiddleware.js"; // Ensure .js is present on local files
 
 const router = express.Router();
 
