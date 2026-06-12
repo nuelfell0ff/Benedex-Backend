@@ -3,7 +3,8 @@ import express from "express";
 import {
 
 initializePayment,
-verifyPayment
+verifyPayment,
+getAllPaymentsForAdmin
 
 }
 from "../controllers/paymentController.js";
@@ -19,6 +20,13 @@ router.post(
 "/initialize",
 protect,
 initializePayment
+);
+
+
+router.get(
+  "/all",
+  protect, // Checks your JWT token
+  getAllPaymentsForAdmin
 );
 
 router.get(
