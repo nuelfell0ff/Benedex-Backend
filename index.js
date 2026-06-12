@@ -26,6 +26,7 @@ import errorHandler from "./middleware/errorMiddleware.js";
 import notFound from "./middleware/notFoundMiddleware.js";
 import lessonRoutes from "./routes/lessonRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
+import instructorRoutes from "./routes/instrutorRoutes.js";
 
 dotenv.config();
 
@@ -163,6 +164,11 @@ app.use(
 app.use(
 "/api/quizzes",
 quizRoutes
+);
+
+app.use(
+"/api/instructor",
+instructorRoutes
 );
 
 
