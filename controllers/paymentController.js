@@ -236,3 +236,23 @@ export const verifyPayment = async (req, res) => {
     });
   }
 };
+
+// Get all payments for admin audit ledger
+export const getAllPaymentsForAdmin = async (req, res) => {
+  try {
+    // Check if the requesting user is an admin
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Not authorized as an admin" });
+    }
+
+    const payments = await Payment.find({})
+      .populate("student", "fullName email")
+      .populate("course", "title")
+      .sort({ createdAt: -1 }); // Newest payments first
+
+    res.json(payments);
+  } catch (error) {
+    console.error("Admin payments fetch failure:", error.message);
+    res.status(500).json({ message: "Failed to retrieve ecosystem transactions" });
+  }
+};
