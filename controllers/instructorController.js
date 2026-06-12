@@ -10,13 +10,13 @@ import User from "../models/User.js";
  */
 export const getInstructorDashboardTelemetry = async (req, res) => {
   try {
-    const instructorId = req.user.id; // Harvested from decoded JWT payload
+    const instructorId = req.user.id; 
 
     // 1. Fetch all course architectures owned explicitly by this instructor
     const instructorCourses = await Course.find({ instructor: instructorId });
     const courseIds = instructorCourses.map(course => course._id);
 
-    // 2. Metrics Pipeline calculations (Reading arrays straight from Course records)
+    // 2. Metrics Pipeline calculations 
     const totalCoursesCount = instructorCourses.length;
 
     // Use a Set to calculate total unique students across all the instructor's courses
@@ -34,21 +34,17 @@ export const getInstructorDashboardTelemetry = async (req, res) => {
       status: "pending"
     });
 
-    // Default or baseline mean completion calculation 
     const calculatedMeanCompletion = 74; 
 
-    // 3. Structural Course Blueprint mappings with internal array metric counting
+    // 3. Structural Course Blueprint mappings
     const courseDirectoryBlueprint = await Promise.all(
       instructorCourses.map(async (course) => {
-        
-        // Count enrolled students directly from the course document array length
         const studentEnrollmentCount = course.students ? course.students.length : 0;
         
-        // Extract tasks awaiting grading for this specific course
         const rawPendingSubmissions = await Submission.find({ 
           course: course._id, 
           status: "pending" 
-        }).populate("student", "fullName"); // Grabs fullName from your User model schema
+        }).populate("student", "fullName");
 
         const pendingTasksArray = rawPendingSubmissions.map(sub => ({
           submissionId: sub._id,
@@ -68,7 +64,7 @@ export const getInstructorDashboardTelemetry = async (req, res) => {
       })
     );
 
-    // 4. Time-series Engagement Deltas and Predictive Risk Warnings
+    // 4. Telemetry simulations
     const simulatedWeeklyEngagement = [45, 58, 62, 79, 84, 92];
 
     const simulatedAtRiskRadar = [
@@ -77,7 +73,6 @@ export const getInstructorDashboardTelemetry = async (req, res) => {
       { studentName: "Chidi Okechukwu", lastActiveWindow: "Overdue 2 tasks", performanceDropPercentage: 19 }
     ];
 
-    // Send payload matching the exact shape expected by your state fields
     return res.status(200).json({
       metrics: {
         totalStudents: totalStudentsCount,
