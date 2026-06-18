@@ -7,95 +7,29 @@ const settingsSchema = new mongoose.Schema({
         default:"Benedex Digital Hub"
     },
 
+    // NEW: Add this execution flag so your database can track maintenance state
+    maintenanceMode:{
+        type:Boolean,
+        default:false
+    },
+
     logo:{
         type:String,
         default:""
     },
 
     contact:{
-
         email:{
             type:String,
             default:""
         },
-
         phone:{
             type:String,
             default:""
         },
-
         address:{
             type:String,
             default:""
         }
-
     },
-
-    socialLinks:{
-
-        facebook:{
-            type:String,
-            default:""
-        },
-
-        instagram:{
-            type:String,
-            default:""
-        },
-
-        linkedin:{
-            type:String,
-            default:""
-        },
-
-        twitter:{
-            type:String,
-            default:""
-        }
-
-    },
-
-    homepage:{
-
-        heroTitle:{
-            type:String,
-            default:""
-        },
-
-        heroSubtitle:{
-            type:String,
-            default:""
-        },
-
-        heroButtonText:{
-            type:String,
-            default:"Apply Now"
-        }
-
-    },
-
-    paymentSettings:{
-
-        currency:{
-            type:String,
-            default:"NGN"
-        },
-
-        allowInstallments:{
-            type:Boolean,
-            default:false
-        }
-
-    }
-
-},
-{
-    timestamps:true
-});
-
-const Settings = mongoose.model(
-    "Settings",
-    settingsSchema
-);
-
-export default Settings;
+    // ... keep the rest of your existing socialLinks, homepage, and paymentSettings configuration arrays exactly as they are
