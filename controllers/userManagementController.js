@@ -1,4 +1,5 @@
 import User from "../models/User.js";
+import bcrypt from "bcryptjs";
 
 
 
@@ -232,4 +233,52 @@ message:error.message
 
 }
 
+};
+
+// create new user
+export const createUser = async (req, res) => {
+  try {
+    const { fullName, email, password, role, status } = req.body;
+
+    // 1. Basic validation
+    if (!fullName || !email || !password) {
+      return res.status(400).json({
+        message: "Please fill in all required fields (Full Name, Email, Password)"
+      });
+    }
+
+    // 2. Check if the user already exists
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({
+        message: "A user with this email address already exists"
+      });
+    }
+
+    // 3. Hash the admin-typed password manually
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // 4. Create the new user
+    const newUser = await User.create({
+      fullName,
+      email,
+      password: hashedPassword,
+      role: role || "student", // Defaults to student if admin leaves it blank
+      status: status || "active" // Defaults to active
+    });
+
+    // 5. Return user data without sending back the password field
+    const createdUser = await User.findById(newUser._id).select("-password");
+
+    res.status(201).json({
+      message: "User created successfully",
+      user: createdUser
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
 };
