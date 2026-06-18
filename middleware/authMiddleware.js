@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-import Settings from "../models/Settings.js"; // <-- 1. Import your Settings model here (make sure the filename matches yours!)
+import Settings from "../models/Settings.js";
 
 const protect = async (req, res, next) => {
   try {
@@ -21,6 +21,20 @@ const protect = async (req, res, next) => {
         decoded.id
       ).select("-password");
 
+      // ==========================================
+      // GLOBAL AUTO-INTERCEPT: MAINTENANCE CHECK
+      // ==========================================
+      const systemConfig = await Settings.findOne();
+      
+      if (systemConfig?.maintenanceMode && req.user && req.user.role !== "admin") {
+        return res.status(503).json({
+          maintenance: true,
+          message: "System Optimization Active. Platform is temporarily offline for students and instructors."
+        });
+      }
+      // ==========================================
+
+      // If everything is normal or user is an admin, let them proceed
       next();
     } else {
       return res.status(401).json({
@@ -45,21 +59,16 @@ const authorize = (...roles) => {
   };
 };
 
-// NEW: 2. Add the Maintenance Check Middleware right here
+// Kept here for safety/explicit backward compatibility if called elsewhere
 const checkMaintenance = async (req, res, next) => {
   try {
-    // Fetch the single global system configuration record
     const systemConfig = await Settings.findOne();
-
-    // If maintenance mode is TRUE, and the current user is NOT an admin, block them
     if (systemConfig?.maintenanceMode && req.user && req.user.role !== "admin") {
       return res.status(503).json({
         maintenance: true,
         message: "System Optimization Active. Platform is temporarily offline for students and instructors."
       });
     }
-
-    // Otherwise, let them proceed to the controller
     next();
   } catch (error) {
     return res.status(500).json({
@@ -71,5 +80,5 @@ const checkMaintenance = async (req, res, next) => {
 export {
   protect,
   authorize,
-  checkMaintenance // <-- 3. Export it alongside the others
+  checkMaintenance
 };
