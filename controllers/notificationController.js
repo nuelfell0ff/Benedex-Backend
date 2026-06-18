@@ -38,38 +38,29 @@ message:error.message
 
 
 
-// Get logged-in user notifications
-export const getNotifications =
-async(req,res)=>{
+// Replace getNotifications inside notificationController.js with this:
+export const getNotifications = async (req, res) => {
+  try {
+    let query = {};
 
-try{
+    // If the logged-in user is a student, show ALL instructor broadcast notifications.
+    // If they are an instructor or admin, they can view their own created logs.
+    if (req.user.role === "student") {
+      query = {}; // Empty query returns all announcements globally
+    } else {
+      query = { user: req.user._id };
+    }
 
-const notifications =
-await Notification.find({
+    const notifications = await Notification.find(query).sort({
+      createdAt: -1,
+    });
 
-user:req.user._id
-
-})
-.sort({
-createdAt:-1
-});
-
-res.json(
-notifications
-);
-
-}
-
-catch(error){
-
-res.status(500).json({
-
-message:error.message
-
-});
-
-}
-
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
 };
 
 
