@@ -30,10 +30,11 @@ router.get("/course/:courseId", protect, async (req, res) => {
 
     const isEligible = totalLessons > 0 && completedLessons >= totalLessons;
 
-    // Check if certificate profile record exists and populate course info for the certificate view
+    // Find the record matching raw database values first and populate the course title relation safely
     const certificate = await Certificate.findOne({ student: studentId, course: courseId }).populate("course");
 
     return res.status(200).json({
+      success: true,
       isEligible,
       totalLessons,
       completedLessons,
@@ -41,10 +42,12 @@ router.get("/course/:courseId", protect, async (req, res) => {
       isPaid: certificate ? certificate.isPaid : false,
       certificateId: certificate ? certificate.certificateId : null,
       issuedAt: certificate ? certificate.createdAt || certificate.updatedAt : null,
-      course: certificate ? certificate.course : null
+      courseTitle: certificate?.course?.title || "Premium Course Track Spec",
+      courseId: courseId
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Status endpoint error:", error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -67,13 +70,13 @@ router.post("/initialize-payment", protect, async (req, res) => {
     });
 
     if (totalLessons === 0 || completedLessons < totalLessons) {
-      return res.status(400).json({ message: "You must finish all course lessons before buying a certificate." });
+      return res.status(400).json({ success: false, message: "You must finish all course lessons before buying a certificate." });
     }
 
     // Set your static price for a certificate (e.g., ₦5,000 = 500000 kobo)
     const certificatePriceKobo = 5000 * 100;
 
-    // Explicitly append query params so PaymentCallback.jsx instantly flags the correct path flow
+    // Dynamically targeting your single unified callback page with parameters
     const baseCallbackUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const absoluteCallbackUrl = `${baseCallbackUrl}/payments/callback?type=certificate`;
 
@@ -101,7 +104,7 @@ router.post("/initialize-payment", protect, async (req, res) => {
     res.status(200).json(paystackResponse.data.data);
   } catch (error) {
     console.error("Certificate initial payment error:", error);
-    res.status(500).json({ message: "Failed to connect to gateway processing systems." });
+    res.status(500).json({ success: false, message: "Failed to connect to gateway processing systems." });
   }
 });
 
@@ -142,11 +145,11 @@ router.get("/verify-payment/:reference", protect, async (req, res) => {
       certificate.paymentReference = reference;
       await certificate.save();
 
-      // Explicitly populate course info before handing back down the pipeline stream
+      // Explicitly populate course info before resolving the call
       await certificate.populate("course");
 
       return res.status(200).json({
-        success: true, // Matches structural conditional layout flags inside PaymentCallback.jsx
+        success: true, // Crucial matching conditional layout flag for PaymentCallback.jsx
         message: "Payment verified. Certificate is officially issued!",
         certificate
       });
