@@ -27,6 +27,7 @@ import notFound from "./middleware/notFoundMiddleware.js";
 import lessonRoutes from "./routes/lessonRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
 import instructorRoutes from "./routes/instructorRoutes.js";
+import certificateRoutes from "./routes/certificateRoutes.js";
 
 dotenv.config();
 
@@ -38,9 +39,9 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
 
-    cors:{
-        origin:"*",
-        methods:["GET","POST"]
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
     }
 
 });
@@ -53,7 +54,7 @@ app.use(
 
     express.text({
 
-        type:[
+        type: [
             "application/json",
             "application/*+json"
         ]
@@ -70,7 +71,7 @@ app.use(
 
     cors({
 
-        origin:"*"
+        origin: "*"
 
     })
 
@@ -157,13 +158,18 @@ app.use(
 );
 
 app.use(
-    "/api/lessons", 
+    "/api/lessons",
     lessonRoutes
 );
 
 app.use(
-"/api/quizzes",
-quizRoutes
+    "/api/quizzes",
+    quizRoutes
+);
+
+app.use(
+    "/api/certificates",
+    certificateRoutes
 );
 
 app.use("/api/instructor", instructorRoutes);
@@ -183,11 +189,11 @@ app.use(
 
 app.get(
     "/",
-    (req,res)=>{
+    (req, res) => {
 
         res.json({
 
-            message:"Benedex API running 🚀"
+            message: "Benedex API running 🚀"
 
         });
 
@@ -203,7 +209,7 @@ io.on(
 
     "connection",
 
-    (socket)=>{
+    (socket) => {
 
         console.log(
             `User connected: ${socket.id}`
@@ -215,7 +221,7 @@ io.on(
 
             "join-room",
 
-            (room)=>{
+            (room) => {
 
                 socket.join(
                     room
@@ -231,7 +237,7 @@ io.on(
 
             "send-message",
 
-            (data)=>{
+            (data) => {
 
                 io.to(
                     data.room
@@ -253,7 +259,7 @@ io.on(
 
             "disconnect",
 
-            ()=>{
+            () => {
 
                 console.log(
                     "User disconnected"
@@ -273,14 +279,14 @@ io.on(
 // Start server
 
 const PORT =
-process.env.PORT || 5000;
+    process.env.PORT || 5000;
 
 
 server.listen(
 
     PORT,
 
-    ()=>{
+    () => {
 
         console.log(
 
