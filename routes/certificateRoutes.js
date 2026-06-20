@@ -30,8 +30,8 @@ router.get("/course/:courseId", protect, async (req, res) => {
 
     const isEligible = totalLessons > 0 && completedLessons >= totalLessons;
 
-    // Check if certificate profile record exists
-    const certificate = await Certificate.findOne({ student: studentId, course: courseId });
+    // Check if certificate profile record exists and populate course info for the certificate view
+    const certificate = await Certificate.findOne({ student: studentId, course: courseId }).populate("course");
 
     return res.status(200).json({
       isEligible,
@@ -39,7 +39,9 @@ router.get("/course/:courseId", protect, async (req, res) => {
       completedLessons,
       hasCertificate: !!certificate,
       isPaid: certificate ? certificate.isPaid : false,
-      certificateId: certificate ? certificate.certificateId : null
+      certificateId: certificate ? certificate.certificateId : null,
+      issuedAt: certificate ? certificate.createdAt || certificate.updatedAt : null,
+      course: certificate ? certificate.course : null
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -71,14 +73,17 @@ router.post("/initialize-payment", protect, async (req, res) => {
     // Set your static price for a certificate (e.g., ₦5,000 = 500000 kobo)
     const certificatePriceKobo = 5000 * 100;
 
+    // Explicitly append query params so PaymentCallback.jsx instantly flags the correct path flow
+    const baseCallbackUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const absoluteCallbackUrl = `${baseCallbackUrl}/payments/callback?type=certificate`;
+
     // Initialize Paystack Gateway Request
     const paystackResponse = await axios.post(
       "https://api.paystack.co/transaction/initialize",
       {
         email: req.user.email,
         amount: certificatePriceKobo,
-        // The frontend route where students land after paying successfully
-        callback_url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/student/certificate-callback`,
+        callback_url: absoluteCallbackUrl,
         metadata: {
           studentId,
           courseId,
@@ -137,16 +142,20 @@ router.get("/verify-payment/:reference", protect, async (req, res) => {
       certificate.paymentReference = reference;
       await certificate.save();
 
+      // Explicitly populate course info before handing back down the pipeline stream
+      await certificate.populate("course");
+
       return res.status(200).json({
+        success: true, // Matches structural conditional layout flags inside PaymentCallback.jsx
         message: "Payment verified. Certificate is officially issued!",
         certificate
       });
     }
 
-    return res.status(400).json({ message: "Transaction validation rejected by gateway network." });
+    return res.status(400).json({ success: false, message: "Transaction validation rejected by gateway network." });
   } catch (error) {
     console.error("Verification endpoint error layout:", error);
-    res.status(500).json({ message: "Internal server verification fault error." });
+    res.status(500).json({ success: false, message: "Internal server verification fault error." });
   }
 });
 
