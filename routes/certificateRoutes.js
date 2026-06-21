@@ -77,7 +77,7 @@ router.post("/initialize-payment", protect, async (req, res) => {
     const certificatePriceKobo = 5000 * 100;
 
     // Dynamically targeting your single unified callback page with parameters
-    const baseCallbackUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const baseCallbackUrl = process.env.FRONTEND_URL || "http://localhost:5173" || "https://benedex.org/";
     const absoluteCallbackUrl = `${baseCallbackUrl}/payments/callback?type=certificate`;
 
     // Initialize Paystack Gateway Request
