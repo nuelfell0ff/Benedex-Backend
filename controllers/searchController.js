@@ -5,49 +5,35 @@ export const globalOmniboxSearch = async (req, res) => {
   try {
     const { q } = req.query;
 
-    // If query string is missing or too short, return clean, empty payloads
     if (!q || q.trim().length < 2) {
       return res.status(200).json([]);
     }
 
-    const searchRegex = new RegExp(q, 'i'); // 'i' flag ensures case-insensitive matching
+    // High performance case-insensitive text matching query 
+    const searchRegex = new RegExp(q.trim(), 'i');
 
-    // Execute queries in parallel using Promise.all to save network execution time
     const [courses, users] = await Promise.all([
-      // 1. Search Courses matching titles
-      Course.find({ title: searchRegex })
-        .select('title _id')
-        .limit(5)
-        .lean(),
-
-      // 2. Search Users (Students, Instructors, Admins) matching names
-      User.find({ name: searchRegex })
-        .select('name role _id')
-        .limit(5)
-        .lean()
+      Course.find({ title: searchRegex }).select('title _id').limit(5).lean(),
+      User.find({ fullName: searchRegex }).select('fullName role _id').limit(5).lean() 
+      // Note: Changed matching query lookup identifier key targets if your model uses 'fullName' instead of 'name'
     ]);
 
-    // Format both datasets into a single layout array matching what your React UI expects
+    // Map properties explicitly into standard titles/paths for frontend component maps
     const formattedCourses = courses.map(course => ({
-      id: course._id,
       title: course.title,
-      type: 'course',
-      path: `/courses/${course._id}`
+      path: `/student/courses/${course._id}`, // Adjust based on your viewport navigation structure
+      type: 'Course'
     }));
 
-    const formattedUsers = users.map(user => ({
-      id: user._id,
-      title: user.name,
-      type: user.role, // Dynamically tracks 'student', 'instructor', or 'admin'
-      path: `/dashboard/admin/users?id=${user._id}` // Example dashboard target link
+    const formattedUsers = users.map(u => ({
+      title: u.fullName || u.name,
+      path: `/admin/users?id=${u._id}`,
+      type: u.role || 'User'
     }));
 
-    // Combine arrays into one unified list
-    const unifiedResults = [...formattedCourses, ...formattedUsers];
-
-    return res.status(200).json(unifiedResults);
+    return res.status(200).json([...formattedCourses, ...formattedUsers]);
   } catch (error) {
-    console.error("Backend global search error instance:", error);
-    return res.status(500).json({ message: "Internal server routing search failure" });
+    console.error("Backend entry sync breakdown instance:", error);
+    return res.status(500).json({ message: "Search service dropped" });
   }
 };
