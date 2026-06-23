@@ -1,81 +1,89 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import AiMessage from '../models/AiMessage.js';
+import PaymentTicket from '../models/PaymentTicket.js';
 
-// Initialize the Google Gen AI SDK (Make sure GEMINI_API_KEY is in your .env file)
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+// 1. Define the structural metadata declaration for the tool
+const paymentTicketTool = {
+  name: 'createPaymentTicket',
+  description: 'Creates an official administrative support ticket when a user provides details about a missing or pending payment issue.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      courseName: { type: Type.STRING, description: 'The title of the course the user paid for.' },
+      paymentReference: { type: Type.STRING, description: 'The bank transaction reference, transaction ID, or receipt token code.' },
+      paymentTime: { type: Type.STRING, description: 'The estimated time or date when the payment transfer took place.' },
+    },
+    required: ['courseName', 'paymentReference', 'paymentTime'],
+  },
+};
 
 export const handleSupportChat = async (req, res) => {
   try {
     const { message } = req.body;
-    const userId = req.user?._id; // Extracted from your auth middleware
+    const userId = req.user?._id;
 
-    if (!message || !message.trim()) {
-      return res.status(400).json({ message: "Message content is required" });
-    }
+    if (!message || !message.trim()) return res.status(400).json({ message: "Empty message" });
 
-    // 1. Fetch recent chat history to maintain conversational memory
-    const recentLogs = await AiMessage.find({ userId })
-      .sort({ createdAt: -1 })
-      .limit(15)
-      .lean();
+    // Save user's chat message text
+    await AiMessage.create({ userId, role: 'user', message: message.trim() });
 
-    // Reverse history so it's in chronological order for the AI model
+    // Fetch history logs
+    const recentLogs = await AiMessage.find({ userId }).sort({ createdAt: -1 }).limit(10).lean();
     const formattedHistory = recentLogs.reverse().map(log => ({
       role: log.role,
       parts: [{ text: log.message }]
     }));
 
-    // 2. Save the user's incoming message to the database
-    await AiMessage.create({ userId, role: 'user', message: message.trim() });
-
-    // 3. Define the strict behavior guidelines for the support agent
     const systemInstruction = `
-  You are Benedex AI, the official administrative support assistant for the Benedex educational platform.
-  
-  Your primary purpose is to help users navigate their Benedex dashboard, manage system settings, and answer general platform questions professionally and politely.
-  
-  CRITICAL RULE: This platform's support loop bypasses instructors completely. You must handle matters directly or escalate them to the administrators. 
-  - For standard platform navigation, account modifications, or tech support, guide the user directly.
-  - If a user asks about complex payment issues, billing reconciliations, official credentials, or institutional disputes, explicitly tell them to contact the "Benedex Admin Team" or open an official Admin Support Ticket.
-  - Do NOT reference or redirect users to instructors for support under any circumstances.
-`;
+      You are Benedex AI, an administrative helper assistant.
+      If a user complains about payment issues, politely ask them to provide: The Course Name, the Payment Reference, and the Date/Time.
+      Once they supply all three details, you MUST invoke the 'createPaymentTicket' tool immediately.
+    `;
 
-    // 4. Request a response using the lightweight, fast gemini-2.5-flash model
+    // 2. Call Gemini providing the tool configuration parameters
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [
-        ...formattedHistory,
-        { role: 'user', parts: [{ text: message.trim() }] }
-      ],
+      contents: [...formattedHistory, { role: 'user', parts: [{ text: message.trim() }] }],
       config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.7
+        systemInstruction,
+        tools: [{ functionDeclarations: [paymentTicketTool] }]
       }
     });
 
-    const aiReplyText = response.text || "I'm having trouble formulating a response right now. Please try again.";
+    // 3. Check if Gemini decided to invoke our payment ticket function call
+    const functionCalls = response.functionCalls;
+    if (functionCalls && functionCalls.length > 0) {
+      const call = functionCalls[0];
+      
+      if (call.name === 'createPaymentTicket') {
+        const { courseName, paymentReference, paymentTime } = call.args;
 
-    // 5. Commit the AI's reply to the database context
-    const savedAiMessage = await AiMessage.create({
-      userId,
-      role: 'model',
-      message: aiReplyText
-    });
+        // Create the document row directly for the admin panel to read
+        await PaymentTicket.create({
+          userId,
+          courseName,
+          paymentReference,
+          paymentTime,
+          status: 'pending'
+        });
 
+        const resolutionMessage = `Thank you! I have compiled your details and forwarded an administrative verification ticket to the Benedex Admin Team. (Reference ID: ${paymentReference}). We will review your transaction logs immediately.`;
+
+        // Save AI response to history track
+        const savedAiMessage = await AiMessage.create({ userId, role: 'model', message: resolutionMessage });
+        return res.status(200).json(savedAiMessage);
+      }
+    }
+
+    // Standard conversational reply if no function was triggered
+    const aiReplyText = response.text || "Let me check that administrative request for you.";
+    const savedAiMessage = await AiMessage.create({ userId, role: 'model', message: aiReplyText });
     return res.status(200).json(savedAiMessage);
-  } catch (error) {
-    console.error("Gemini support loop engine breakdown:", error);
-    return res.status(500).json({ message: "AI Support system connection timed out." });
-  }
-};
 
-// Optional: Endpoint to let the frontend clear or pull historical logs
-export const getSupportHistory = async (req, res) => {
-  try {
-    const userId = req.user?._id;
-    const history = await AiMessage.find({ userId }).sort({ createdAt: 1 }).lean();
-    return res.status(200).json(history);
   } catch (error) {
-    return res.status(500).json({ message: "Failed to retrieve history" });
+    console.error("Critical Function Calling engine exception:", error);
+    return res.status(500).json({ message: "Internal Server Processing Error" });
   }
 };
