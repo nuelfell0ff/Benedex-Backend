@@ -100,3 +100,20 @@ export const handleSupportChat = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Processing Error" });
   }
 };
+
+// 🆕 RESTORED: Endpoint to pull historical logs for the floating UI widget view
+export const getSupportHistory = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    
+    // Find all message logs for this specific user in chronological order
+    const history = await AiMessage.find({ userId })
+      .sort({ createdAt: 1 })
+      .lean();
+      
+    return res.status(200).json(history);
+  } catch (error) {
+    console.error("Failed to retrieve chat history:", error);
+    return res.status(500).json({ message: "Failed to retrieve history logs." });
+  }
+};
