@@ -30,19 +30,24 @@ router.get("/course/:courseId", protect, async (req, res) => {
 
     const isEligible = totalLessons > 0 && completedLessons >= totalLessons;
 
-    // Check if certificate profile record exists
-    const certificate = await Certificate.findOne({ student: studentId, course: courseId });
+    // Find the record matching raw database values first and populate the course title relation safely
+    const certificate = await Certificate.findOne({ student: studentId, course: courseId }).populate("course");
 
     return res.status(200).json({
+      success: true,
       isEligible,
       totalLessons,
       completedLessons,
       hasCertificate: !!certificate,
       isPaid: certificate ? certificate.isPaid : false,
-      certificateId: certificate ? certificate.certificateId : null
+      certificateId: certificate ? certificate.certificateId : null,
+      issuedAt: certificate ? certificate.createdAt || certificate.updatedAt : null,
+      courseTitle: certificate?.course?.title || "Premium Course Track Spec",
+      courseId: courseId
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Status endpoint error:", error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -65,11 +70,15 @@ router.post("/initialize-payment", protect, async (req, res) => {
     });
 
     if (totalLessons === 0 || completedLessons < totalLessons) {
-      return res.status(400).json({ message: "You must finish all course lessons before buying a certificate." });
+      return res.status(400).json({ success: false, message: "You must finish all course lessons before buying a certificate." });
     }
 
     // Set your static price for a certificate (e.g., ₦5,000 = 500000 kobo)
     const certificatePriceKobo = 5000 * 100;
+
+    // Dynamically targeting your single unified callback page with parameters
+    const baseCallbackUrl = process.env.FRONTEND_URL || "http://localhost:5173" || "https://benedex.org/";
+    const absoluteCallbackUrl = `${baseCallbackUrl}/payments/callback?type=certificate`;
 
     // Initialize Paystack Gateway Request
     const paystackResponse = await axios.post(
@@ -77,8 +86,7 @@ router.post("/initialize-payment", protect, async (req, res) => {
       {
         email: req.user.email,
         amount: certificatePriceKobo,
-        // The frontend route where students land after paying successfully
-        callback_url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/student/certificate-callback`,
+        callback_url: absoluteCallbackUrl,
         metadata: {
           studentId,
           courseId,
@@ -96,7 +104,7 @@ router.post("/initialize-payment", protect, async (req, res) => {
     res.status(200).json(paystackResponse.data.data);
   } catch (error) {
     console.error("Certificate initial payment error:", error);
-    res.status(500).json({ message: "Failed to connect to gateway processing systems." });
+    res.status(500).json({ success: false, message: "Failed to connect to gateway processing systems." });
   }
 });
 
@@ -137,16 +145,20 @@ router.get("/verify-payment/:reference", protect, async (req, res) => {
       certificate.paymentReference = reference;
       await certificate.save();
 
+      // Explicitly populate course info before resolving the call
+      await certificate.populate("course");
+
       return res.status(200).json({
+        success: true, // Crucial matching conditional layout flag for PaymentCallback.jsx
         message: "Payment verified. Certificate is officially issued!",
         certificate
       });
     }
 
-    return res.status(400).json({ message: "Transaction validation rejected by gateway network." });
+    return res.status(400).json({ success: false, message: "Transaction validation rejected by gateway network." });
   } catch (error) {
     console.error("Verification endpoint error layout:", error);
-    res.status(500).json({ message: "Internal server verification fault error." });
+    res.status(500).json({ success: false, message: "Internal server verification fault error." });
   }
 });
 

@@ -28,6 +28,8 @@ import lessonRoutes from "./routes/lessonRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
 import instructorRoutes from "./routes/instructorRoutes.js";
 import certificateRoutes from "./routes/certificateRoutes.js";
+import searchRoutes from "./routes/searchRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 
 dotenv.config();
 
@@ -173,6 +175,10 @@ app.use(
 );
 
 app.use("/api/instructor", instructorRoutes);
+
+app.use('/api', searchRoutes);
+
+app.use('/api/ai', aiRoutes);
 
 
 
