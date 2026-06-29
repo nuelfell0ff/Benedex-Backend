@@ -91,7 +91,7 @@ router.post('/admin-broadcast', protect, upload.single('image'), async (req, res
       icon: '/logo192.png', 
       image: uploadedImageUrl, // Large banner image passed seamlessly to the worker configuration
       data: {
-        url: url || '/student/dashboard'
+        url: url || '/student'
       }
     });
 
