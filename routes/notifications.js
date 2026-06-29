@@ -7,6 +7,9 @@ import multer from 'multer'; // 2. Import multer for file handling
 
 const router = express.Router();
 
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
 // Initialize web-push configuration
 webpush.setVapidDetails(
   'mailto:obaloluwaajayi2006@gmail.com', // Explicitly set the email string here
