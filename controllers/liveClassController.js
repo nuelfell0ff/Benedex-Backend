@@ -1,94 +1,74 @@
 import LiveClass from "../models/LiveClass.js";
 import { recordLearningActivity } from "../utils/studentLearning.js";
-
-
+// 1. Import your new push notification utility
+import sendPushNotification from "../utils/sendPushNotification.js";
+// Assuming you have access to a Course model to get the student list
+import Course from "../models/Course.js"; 
 
 // Create live class
 export const createLiveClass = async (req, res) => {
-
   try {
-
-    const liveClass =
-      await LiveClass.create({
-
-        title: req.body.title,
-        description: req.body.description,
-        course: req.body.course,
-        meetingLink: req.body.meetingLink,
-        platform: req.body.platform,
-        startTime: req.body.startTime,
-        endTime: req.body.endTime,
-        instructor: req.user._id
-
-      });
-
-    res.status(201).json(
-      liveClass
-    );
-
-  }
-
-  catch (error) {
-
-    res.status(500).json({
-
-      message: error.message
-
+    const liveClass = await LiveClass.create({
+      title: req.body.title,
+      description: req.body.description,
+      course: req.body.course,
+      meetingLink: req.body.meetingLink,
+      platform: req.body.platform,
+      startTime: req.body.startTime,
+      endTime: req.body.endTime,
+      instructor: req.user._id
     });
 
-  }
+    // Send HTTP response immediately so the admin/instructor interface stays snappy
+    res.status(201).json(liveClass);
 
+    // 2. BACKGROUND TASK: Broadcast Chrome Push Notifications to all enrolled students
+    try {
+      const courseData = await Course.findById(req.body.course);
+      
+      if (courseData && Array.isArray(courseData.students)) {
+        // Map through all student IDs and fire notifications in parallel
+        courseData.students.forEach(async (studentId) => {
+          await sendPushNotification(studentId, {
+            title: "🔴 New Live Class Scheduled!",
+            body: `"${req.body.title}" has been scheduled. Check your dashboard timeline.`,
+            url: "/student/live-classes" // Redirects them to live classes view when clicked
+          });
+        });
+      }
+    } catch (pushError) {
+      console.error("Background broadcast push notification failure:", pushError);
+    }
+
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
 };
 
-
-
-
 // Get classes for a course
-export const getCourseLiveClasses =
-  async (req, res) => {
-
-    try {
-
-      const classes =
-        await LiveClass.find({
-
-          course: req.params.courseId
-
-        })
-
-          .populate(
-            "instructor",
-            "fullName"
-          )
-
-          .sort({
-            startTime: 1
-          });
-
-      res.json(
-        classes
-      );
-
-    }
-
-    catch (error) {
-
-      res.status(500).json({
-
-        message: error.message
-
+export const getCourseLiveClasses = async (req, res) => {
+  try {
+    const classes = await LiveClass.find({
+      course: req.params.courseId
+    })
+      .populate("instructor", "fullName")
+      .sort({
+        startTime: 1
       });
 
-    }
-
-  };
-
+    res.json(classes);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
+};
 
 // Get classes available to the logged-in student
 export const getStudentLiveClasses = async (req, res) => {
-
   try {
-
     const classes = await LiveClass.find()
       .populate("instructor", "fullName")
       .populate("course", "title students")
@@ -103,27 +83,16 @@ export const getStudentLiveClasses = async (req, res) => {
     );
 
     res.json(visibleClasses);
-
-  }
-
-  catch (error) {
-
+  } catch (error) {
     res.status(500).json({
-
       message: error.message
-
     });
-
   }
-
 };
-
 
 // Join a live class
 export const joinLiveClass = async (req, res) => {
-
   try {
-
     const liveClass = await LiveClass.findById(req.params.classId)
       .populate("course", "title students");
 
@@ -164,17 +133,9 @@ export const joinLiveClass = async (req, res) => {
       meetingLink: liveClass.meetingLink,
       liveClassId: liveClass._id
     });
-
-  }
-
-  catch (error) {
-
+  } catch (error) {
     res.status(500).json({
-
       message: error.message
-
     });
-
   }
-
 };

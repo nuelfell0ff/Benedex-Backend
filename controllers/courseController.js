@@ -1,6 +1,8 @@
 import Course from "../models/Course.js";
 import Progress from "../models/Progress.js";
 import { applyXpToUser, recordLearningActivity } from "../utils/studentLearning.js";
+// 1. Import your push notification utility
+import sendPushNotification from "../utils/sendPushNotification.js";
 
 // Create Course
 export const createCourse = async (req, res) => {
@@ -77,7 +79,20 @@ export const enrollCourse = async (req, res) => {
       points: 10
     });
 
+    // Send the HTTP response immediately to keep the UI snappy
     res.json({ message: "Enrollment successful", course });
+
+    // BACKGROUND TASK: Send a Chrome Web Push confirmation notification to the student
+    try {
+      await sendPushNotification(req.user._id, {
+        title: "🚀 Enrollment Confirmed!",
+        body: `Welcome to "${course.title}". Your learning path is unlocked!`,
+        url: `/student/course/${course._id}` // Directly navigates them into the course workspace
+      });
+    } catch (pushError) {
+      console.error("Background task course enrollment push failure:", pushError);
+    }
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

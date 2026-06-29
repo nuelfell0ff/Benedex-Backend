@@ -30,6 +30,7 @@ import instructorRoutes from "./routes/instructorRoutes.js";
 import certificateRoutes from "./routes/certificateRoutes.js";
 import searchRoutes from "./routes/searchRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
+import notification from "./routes/notifications.js";
 
 dotenv.config();
 
@@ -180,6 +181,7 @@ app.use('/api', searchRoutes);
 
 app.use('/api/ai', aiRoutes);
 
+app.use("/api/notifications", notificationRoutes);
 
 
 app.use(
