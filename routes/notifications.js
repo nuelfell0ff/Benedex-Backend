@@ -44,5 +44,56 @@ router.post('/subscribe', protect, async (req, res) => {
   }
 });
 
+// 3. Admin Custom Broadcast Notification (With Image Support)
+router.post('/admin-broadcast', protect, async (req, res) => {
+  // Guard: Ensure only admins can trigger this endpoint
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Access denied. Administrator privileges required.' });
+  }
+
+  // Destructure 'image' from the request body alongside title, body, and url
+  const { title, body, url, image } = req.body;
+
+  if (!title || !body) {
+    return res.status(400).json({ message: 'Notification title and body are required.' });
+  }
+
+  try {
+    // Fetch all registered browser subscription nodes
+    const subscriptions = await NotificationSubscription.find();
+
+    if (subscriptions.length === 0) {
+      return res.status(200).json({ message: 'No active browser devices registered to notify.' });
+    }
+
+    const stringifiedPayload = JSON.stringify({
+      title: title,
+      body: body,
+      icon: '/logo192.png', // Small app logo icon
+      image: image || null, // Large banner image URL (e.g., Cloudinary image link)
+      data: {
+        url: url || '/student/dashboard'
+      }
+    });
+
+    // Broadcast the custom alert to every device concurrently
+    const sendPromises = subscriptions.map(sub => {
+      return webpush.sendNotification(sub, stringifiedPayload)
+        .catch(async (err) => {
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            await NotificationSubscription.deleteOne({ _id: sub._id });
+          }
+        });
+    });
+
+    await Promise.all(sendPromises);
+
+    res.status(200).json({ success: true, message: `Broadcast successfully dispatched to ${subscriptions.length} devices.` });
+  } catch (error) {
+    console.error('Admin broadcast failure:', error);
+    res.status(500).json({ message: 'Failed to dispatch administrator broadcast.' });
+  }
+});
+
 // Export using ES Modules default export
 export default router;
