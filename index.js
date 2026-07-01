@@ -181,7 +181,7 @@ app.use('/api', searchRoutes);
 
 app.use('/api/ai', aiRoutes);
 
-app.use("/api/notifications", notificationRoutes);
+app.use("/api/notifications", notification);
 
 
 app.use(
