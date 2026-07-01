@@ -1,9 +1,13 @@
 import express from 'express';
 import webpush from 'web-push';
 import NotificationSubscription from '../models/NotificationSubscription.js';
-import { protect } from '../middleware/authMiddleware.js'; // Added .js extension
-import cloudinary from '../config/cloudinary.js'; // 1. Import your Cloudinary config
-import multer from 'multer'; // 2. Import multer for file handling
+import { protect } from '../middleware/authMiddleware.js'; 
+import cloudinary from '../config/cloudinary.js'; 
+import multer from 'multer'; 
+
+// 👇 1. IMPORT YOUR ACTIVITY LOG MODEL & LOGGER UTILITY HERE
+import ActivityLog from '../models/ActivityLog.js';
+import { logAdminActivity } from '../middleware/auditLogger.js';
 
 const router = express.Router();
 
@@ -12,10 +16,31 @@ const upload = multer({ storage });
 
 // Initialize web-push configuration
 webpush.setVapidDetails(
-  'mailto:obaloluwaajayi2006@gmail.com', // Explicitly set the email string here
+  'mailto:obaloluwaajayi2006@gmail.com', 
   'BMUvDtdoxCJmJ4O_kI4zujwzYH10eO_hq357QEMh5wXZnZyjcuDTolf_wE2q6o3jMzMp4_XjFLW69xpEHmtdHR0',
   'GgZ-szRiQwa6KpLqTpSt4-K3iN0hb1V9WcrRlglr5YI'
 );
+
+// 👇 2. NEW ENDPOINT: FETCH ALL SYSTEM LOGS FOR YOUR NEW FRONTEND PAGE
+// This fixes the 404 error your browser console was throwing!
+router.get('/admin-logs', protect, async (req, res) => {
+  try {
+    // Guard: Only let verified admins view the security trail
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Access denied. Admin privileges required.' });
+    }
+
+    // Fetch the 100 most recent logs from the DB
+    const logs = await ActivityLog.find()
+      .sort({ createdAt: -1 })
+      .limit(100);
+    
+    res.status(200).json({ success: true, logs });
+  } catch (error) {
+    console.error('Failed to fetch audit trails:', error);
+    res.status(500).json({ success: false, message: 'Internal server error tracking push node.' });
+  }
+});
 
 // 1. Get the public VAPID key to hand over to the client browser
 router.get('/vapid-key', protect, (req, res) => {
@@ -35,7 +60,7 @@ router.post('/subscribe', protect, async (req, res) => {
     await NotificationSubscription.findOneAndUpdate(
       { endpoint: subscription.endpoint },
       {
-        user: req.user._id, // Set by your auth middleware
+        user: req.user._id, 
         keys: subscription.keys,
         expirationTime: subscription.expirationTime
       },
@@ -50,7 +75,6 @@ router.post('/subscribe', protect, async (req, res) => {
 });
 
 // 3. Admin Custom Broadcast Notification (With Auto Cloudinary Upload)
-// We add 'upload.single("image")' to capture the file input from the admin form
 router.post('/admin-broadcast', protect, upload.single('image'), async (req, res) => {
   // Guard: Ensure only admins can trigger this endpoint
   if (req.user.role !== 'admin') {
@@ -75,7 +99,7 @@ router.post('/admin-broadcast', protect, upload.single('image'), async (req, res
         resource_type: "auto"
       });
       
-      uploadedImageUrl = uploadedFile.secure_url; // Grab the hosted secure URL string
+      uploadedImageUrl = uploadedFile.secure_url; 
     }
 
     // Fetch all active browser tracking configurations
@@ -89,7 +113,7 @@ router.post('/admin-broadcast', protect, upload.single('image'), async (req, res
       title: title,
       body: body,
       icon: '/logo192.png', 
-      image: uploadedImageUrl, // Large banner image passed seamlessly to the worker configuration
+      image: uploadedImageUrl, 
       data: {
         url: url || '/student'
       }
@@ -107,6 +131,14 @@ router.post('/admin-broadcast', protect, upload.single('image'), async (req, res
 
     await Promise.all(sendPromises);
 
+    // 🛡️ SECURITY AUDIT TRAIL: Track who blasted this broadcast across the platform!
+    await logAdminActivity(
+      req,
+      "NOTIFICATIONS",
+      "CREATE",
+      `Dispatched a global web push broadcast notification to ${subscriptions.length} device nodes. Subject: "${title}".`
+    );
+
     res.status(200).json({ 
       success: true, 
       message: `Broadcast successfully dispatched to ${subscriptions.length} devices.`,
@@ -118,5 +150,5 @@ router.post('/admin-broadcast', protect, upload.single('image'), async (req, res
     res.status(500).json({ message: 'Failed to upload image or dispatch administrator broadcast.' });
   }
 });
-// Export using ES Modules default export
+
 export default router;
