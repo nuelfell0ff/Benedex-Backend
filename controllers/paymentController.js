@@ -5,13 +5,12 @@ import Course from "../models/Course.js";
 import Progress from "../models/Progress.js";
 import { applyXpToUser, recordLearningActivity } from "../utils/studentLearning.js";
 
-
+// 👇 IMPORT THE CENTRAL AUDIT LOGGER SERVICE HERE
+import { logAdminActivity } from "../middleware/auditLogger.js";
 
 // Initialize payment
 export const initializePayment = async (req, res) => {
-
   try {
-
     // Ensure Paystack secret is configured
     const paystackKey = process.env.PAYSTACK_SECRET_KEY;
     if (!paystackKey || paystackKey === "your_secret_key") {
@@ -20,42 +19,23 @@ export const initializePayment = async (req, res) => {
         message: "Server misconfiguration: PAYSTACK_SECRET_KEY is not set. Please set it in the .env file."
       });
     }
-    const course = await Course.findById(
-      req.body.courseId
-    );
+    const course = await Course.findById(req.body.courseId);
 
     if (!course) {
-
-      return res.status(404).json({
-
-        message: "Course not found"
-
-      });
-
+      return res.status(404).json({ message: "Course not found" });
     }
 
-    const reference =
-      "BEN_" + Date.now();
-
+    const reference = "BEN_" + Date.now();
     const callbackUrl = req.body.callbackUrl;
 
-
     const response = await axios.post(
-
       "https://api.paystack.co/transaction/initialize",
-
       {
-
         email: req.user.email,
-
         amount: course.price * 100,
-
         reference,
-
         callback_url: callbackUrl
-
       },
-
       {
         headers: {
           Authorization: `Bearer ${paystackKey}`,
@@ -64,17 +44,12 @@ export const initializePayment = async (req, res) => {
       }
     );
 
-
-
     await Payment.create({
-
       student: req.user._id,
       course: course._id,
       amount: course.price,
       reference
-
     });
-
 
     res.json({
       authorization_url: response.data.data.authorization_url,
@@ -89,14 +64,9 @@ export const initializePayment = async (req, res) => {
   }
 };
 
-
-
-
 // Verify payment
 export const verifyPayment = async (req, res) => {
-
   try {
-
     // Ensure Paystack secret is configured
     const paystackKey = process.env.PAYSTACK_SECRET_KEY;
     if (!paystackKey || paystackKey === "your_secret_key") {
@@ -108,28 +78,16 @@ export const verifyPayment = async (req, res) => {
 
     const reference = req.params.reference;
 
-
-    const response =
-      await axios.get(
-
-        `https://api.paystack.co/transaction/verify/${reference}`,
-
-        {
-          headers: {
-            Authorization: `Bearer ${paystackKey}`
-          }
+    const response = await axios.get(
+      `https://api.paystack.co/transaction/verify/${reference}`,
+      {
+        headers: {
+          Authorization: `Bearer ${paystackKey}`
         }
+      }
+    );
 
-      );
-
-
-
-    const payment =
-      await Payment.findOne({
-
-        reference
-
-      });
+    const payment = await Payment.findOne({ reference });
 
     if (!payment) {
       return res.status(404).json({
@@ -153,48 +111,22 @@ export const verifyPayment = async (req, res) => {
       });
     }
 
-
-    if (
-      response.data.data.status ===
-      "success"
-    ) {
-
-      payment.status =
-        "success";
-
+    if (response.data.data.status === "success") {
+      payment.status = "success";
       await payment.save();
 
-
-
       // auto enrollment
-      const course =
-        await Course.findById(
-          payment.course
-        );
+      const course = await Course.findById(payment.course);
 
-
-      if (
-        !course.students.includes(
-          payment.student
-        )
-      ) {
-
-        course.students.push(
-          payment.student
-        );
-
+      if (!course.students.includes(payment.student)) {
+        course.students.push(payment.student);
         await course.save();
-
       }
 
-
-
       await Progress.create({
-
         student: payment.student,
         course: payment.course,
         completedModules: []
-
       });
 
       const student = await User.findById(payment.student);
@@ -215,14 +147,11 @@ export const verifyPayment = async (req, res) => {
         courseId: payment.course,
         message: "Payment verified and enrollment completed"
       });
-
     }
 
     payment.status = "failed";
     await payment.save();
 
-
-    // send structured response back to client with course id and success flag
     res.status(400).json({
       success: false,
       courseId: payment.course,
@@ -249,6 +178,14 @@ export const getAllPaymentsForAdmin = async (req, res) => {
       .populate("student", "fullName email")
       .populate("course", "title")
       .sort({ createdAt: -1 }); // Newest payments first
+
+    // 🛡️ SECURITY AUDIT TRAIL: Log that an admin loaded the global payment transactions grid
+    await logAdminActivity(
+      req,
+      "PAYMENT",
+      "VIEW",
+      "Accessed and reviewed the global payment transaction records."
+    );
 
     res.json(payments);
   } catch (error) {

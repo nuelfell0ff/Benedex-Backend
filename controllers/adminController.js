@@ -2,8 +2,11 @@ import User from "../models/User.js";
 import Course from "../models/Course.js";
 import Payment from "../models/Payment.js";
 import Submission from "../models/Submission.js";
-import PaymentTicket from "../models/PaymentTicket.js"; // <-- Import the new ticket model
-import AiMessage from "../models/AiMessage.js";         // <-- Import to send automated updates back to chat
+import PaymentTicket from "../models/PaymentTicket.js"; 
+import AiMessage from "../models/AiMessage.js";        
+
+// 👇 IMPORT THE LOGGING SERVICE HERE
+import { logAdminActivity } from "../middleware/auditLogger.js";
 
 export const getAdminAnalytics = async (req, res) => {
   try {
@@ -38,6 +41,14 @@ export const getAdminAnalytics = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(5);
 
+    // 🛡️ SECURITY AUDIT TRAIL: Log analytics data view entry
+    await logAdminActivity(
+      req,
+      "ANALYTICS",
+      "VIEW",
+      "Loaded and viewed the main metrics dashboard and financial data streams."
+    );
+
     res.json({
       overview: {
         totalStudents,
@@ -61,6 +72,14 @@ export const getPaymentTickets = async (req, res) => {
       .populate("userId", "fullName email")
       .sort({ createdAt: -1 });
     
+    // 🛡️ SECURITY AUDIT TRAIL: Log viewing support tickets
+    await logAdminActivity(
+      req,
+      "SUPPORT_TICKETS",
+      "VIEW",
+      "Opened and audited the active support tickets data grid."
+    );
+
     res.status(200).json(tickets);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -92,6 +111,15 @@ export const resolvePaymentTicket = async (req, res) => {
       role: "model",
       message: systemNoticeText
     });
+
+    // 🛡️ SECURITY AUDIT TRAIL: Log exact action details, target ticket, and payment reference code
+    const actionUppercase = action.toUpperCase(); // 'RESOLVED' or 'REJECTED'
+    await logAdminActivity(
+      req,
+      "SUPPORT_TICKETS",
+      "UPDATE",
+      `${actionUppercase} payment ticket reference [${ticket.paymentReference}] for course: "${ticket.courseName}".`
+    );
 
     res.status(200).json({ message: "Ticket processed successfully and user notified.", ticket });
   } catch (error) {

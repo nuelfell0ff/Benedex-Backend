@@ -38,7 +38,7 @@ message:error.message
 
 
 
-// Replace getNotifications inside notificationController.js with this:
+
 export const getNotifications = async (req, res) => {
   try {
     let query = {};
