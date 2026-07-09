@@ -3,6 +3,9 @@ import crypto from "crypto";
 import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 import { recordLearningActivity } from "../utils/studentLearning.js";
+import { OAuth2Client } from "google-auth-library";
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // @desc    Register standard email user
 export const registerUser = async (req, res) => {
@@ -57,7 +60,9 @@ export const loginUser = async (req, res) => {
 
         // Safety catch if a Google-only user tries traditional login without setting a password
         if (!user.password) {
-            return res.status(400).json({ message: "Account registered using Google Auth. Please sign in via Google." });
+            return res.status(400).json({ 
+                message: "Account registered using Google Auth. Please sign in via Google." 
+            });
         }
 
         if (await bcrypt.compare(password, user.password)) {
@@ -88,9 +93,25 @@ export const loginUser = async (req, res) => {
 // @desc    Handle incoming token payloads signed from Google client frontend
 export const googleAuthCallbackSuccess = async (req, res) => {
     try {
-        const { googleId, email, fullName, profileImage } = req.body;
+        const { credential } = req.body; // Token sent by the frontend Google Login button
 
-        // Find or create the user record matching by Google Account Identity parameters
+        if (!credential) {
+            return res.status(400).json({ message: "Google verification token missing." });
+        }
+
+        // Cryptographically verify the token directly with Google's public security keys
+        const ticket = await client.verifyIdToken({
+            idToken: credential,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const googleId = payload['sub']; // Google's unique structural ID for this specific user
+        const email = payload['email'];
+        const fullName = payload['name'];
+        const profileImage = payload['picture'];
+
+        // Find or create the user record matching by Google Account Parameters
         let user = await User.findOne({ $or: [{ googleId }, { email: email.toLowerCase() }] });
 
         if (!user) {
@@ -99,7 +120,7 @@ export const googleAuthCallbackSuccess = async (req, res) => {
                 email,
                 googleId,
                 profileImage: profileImage || "",
-                role: "student" // Default fallback role allocation node
+                role: "student"
             });
 
             await recordLearningActivity({
@@ -109,12 +130,13 @@ export const googleAuthCallbackSuccess = async (req, res) => {
                 points: 0
             });
         } else if (!user.googleId) {
-            // Link Google account to existing local profile if emails match
+            // Securely link Google identity to existing local profile if emails align
             user.googleId = googleId;
             if (!user.profileImage && profileImage) user.profileImage = profileImage;
             await user.save();
         }
 
+        // Return your system's native JWT token back to the frontend
         res.status(200).json({
             _id: user._id,
             fullName: user.fullName,
@@ -123,7 +145,7 @@ export const googleAuthCallbackSuccess = async (req, res) => {
             token: generateToken(user._id)
         });
     } catch (error) {
-        res.status(500).json({ message: "Google Authentication engine error: " + error.message });
+        res.status(500).json({ message: "Google Authentication engine token validation failure: " + error.message });
     }
 };
 
