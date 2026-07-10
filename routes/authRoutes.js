@@ -4,8 +4,10 @@ import {
     loginUser,
     googleAuthCallbackSuccess,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    updatePassword // 1. Import your new controller method here
 } from "../controllers/authController.js";
+import { protect } from "../middleware/authMiddleware.js"; // 2. Import your token protection middleware
 
 const router = express.Router();
 
@@ -19,5 +21,8 @@ router.post("/google", googleAuthCallbackSuccess);
 // 🔒 CREDENTIAL PROTECTION RESET ROUTES
 router.post("/forgot-password", forgotPassword);
 router.put("/reset-password/:token", resetPassword);
+
+// 🛠️ PROFILE SECURITY UPDATE VECTOR (Protected Endpoint)
+router.put("/update-password", protect, updatePassword);
 
 export default router;
