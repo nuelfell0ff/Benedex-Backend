@@ -212,3 +212,39 @@ export const resetPassword = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// @desc    Update password for a logged-in user inside profile dashboard
+// @route   PUT /api/auth/update-password
+// @access  Private
+export const updatePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        // 1. Fetch user by id verified from auth token middleware
+        const user = await User.findById(req.user?._id || req.user?._id);
+        if (!user) {
+            return res.status(404).json({ message: "User account not found." });
+        }
+
+        // 2. If user registered via Google only and hasn't set a password yet, bypass match verification
+        if (user.password) {
+            const isMatch = await bcrypt.compare(currentPassword, user.password);
+            if (!isMatch) {
+                return res.status(400).json({ message: "Invalid current password credential." });
+            }
+        }
+
+        // 3. Encrypt and pin the new password string
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: "System password updated successfully!"
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Password update sequence error: " + error.message });
+    }
+};
