@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 import { recordLearningActivity } from "../utils/studentLearning.js";
 import { OAuth2Client } from "google-auth-library";
+import nodemailer from "nodemailer";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -159,22 +160,56 @@ export const forgotPassword = async (req, res) => {
             return res.status(404).json({ message: "No user account matched with that email address." });
         }
 
-        // Generate short random crypto string tokens
-        const resetToken = crypto.randomBytes(20).toString("hex");
+        // 1. Generate a secure 6-digit random numeric code
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // Hash it before pinning inside database node for protection parameters
-        user.resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
-        user.resetPasswordExpires = Date.now() + 3600000; // Token expires precisely in 1 Hour
+        // 2. Hash the code before storing it in the database for security
+        user.resetPasswordToken = crypto.createHash("sha256").update(verificationCode).digest("hex");
+        user.resetPasswordExpires = Date.now() + 600000; // Code expires tightly in 10 Minutes
 
         await user.save();
 
+        // 3. Configure the Nodemailer Email Transporter
+        const transporter = nodemailer.createTransport({
+            host: process.env.EMAIL_HOST,
+            port: process.env.EMAIL_PORT,
+            secure: false, // true for port 465, false for other ports
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+            },
+        });
+
+        // 4. Draft the Email Template
+        const mailOptions = {
+            from: `"Benedex Support" <${process.env.EMAIL_USER}>`,
+            to: user.email,
+            subject: "Your Password Reset Verification Code",
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+                    <h2 style="color: #194066; text-align: center;">Password Reset Request</h2>
+                    <p>Hello ${user.fullName},</p>
+                    <p>We received a request to reset your password. Use the verification code below to complete your reset sequence. This code is active for <strong>10 minutes</strong>.</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; padding: 12px 24px; background-color: #f4f6f8; border-radius: 4px; color: #1E844F; border: 1px dashed #1E844F;">
+                            ${verificationCode}
+                        </span>
+                    </div>
+                    <p style="font-size: 12px; color: #666;">If you did not initiate this request, please ignore this email or secure your account credentials.</p>
+                </div>
+            `,
+        };
+
+        // 5. Fire the email delivery vector
+        await transporter.sendMail(mailOptions);
+
         res.status(200).json({
             success: true,
-            message: "Password verification token successfully initialized.",
-            resetToken: resetToken // Hand token over back safely to interface routing pipelines
+            message: "A password verification code has been successfully dispatched to your email inbox."
         });
+
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: "Email delivery system failure: " + error.message });
     }
 };
 
