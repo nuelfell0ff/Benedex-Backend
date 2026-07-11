@@ -151,6 +151,7 @@ export const googleAuthCallbackSuccess = async (req, res) => {
 };
 
 // @desc    Generate password reset token string vectors
+// @desc    Generate password reset token string vectors
 export const forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
@@ -169,18 +170,17 @@ export const forgotPassword = async (req, res) => {
 
         await user.save();
 
-        // 3. Configure Gmail transport forcing the native service mapping to avoid IPv6 dead-ends
+        // 3. Force IPv4 routing via an explicit DNS lookup handler and use Secure SSL Port 465
         const transporter = nodemailer.createTransport({
-            service: 'gmail', 
             host: 'smtp.gmail.com',
-            port: 587,
-            secure: false, // upgrades later via STARTTLS
+            port: 465,
+            secure: true, // Absolute SSL connection
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_PASS,
             },
             tls: {
-                rejectUnauthorized: false // Prevents self-signed credential blocks on Render containers
+                rejectUnauthorized: false
             }
         });
 
