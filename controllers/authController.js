@@ -169,18 +169,18 @@ export const forgotPassword = async (req, res) => {
 
         await user.save();
 
-        // 3. Configure the Nodemailer Email Transporter (Cast port explicitly to a Number)
+        // 3. Configure Gmail SMTP transport with explicit TLS handling for hosted environments
         const transporter = nodemailer.createTransport({
             host: process.env.EMAIL_HOST,
             port: Number(process.env.EMAIL_PORT) || 587,
-            secure: Number(process.env.EMAIL_PORT) === 465, // True only if using port 465 SSL
+            secure: false, // false for port 587; Gmail uses upgrades via STARTTLS
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_PASS,
             },
-            // TLS option handles potential self-signed certificate issues on shared cloud environments
             tls: {
-                rejectUnauthorized: false
+                ciphers: 'SSLv3',
+                rejectUnauthorized: false // Prevents self-signed credential blocks on Render containers
             }
         });
 
