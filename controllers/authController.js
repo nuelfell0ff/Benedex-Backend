@@ -169,15 +169,19 @@ export const forgotPassword = async (req, res) => {
 
         await user.save();
 
-        // 3. Configure the Nodemailer Email Transporter
+        // 3. Configure the Nodemailer Email Transporter (Cast port explicitly to a Number)
         const transporter = nodemailer.createTransport({
             host: process.env.EMAIL_HOST,
-            port: process.env.EMAIL_PORT,
-            secure: false, // true for port 465, false for other ports
+            port: Number(process.env.EMAIL_PORT) || 587,
+            secure: Number(process.env.EMAIL_PORT) === 465, // True only if using port 465 SSL
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_PASS,
             },
+            // TLS option handles potential self-signed certificate issues on shared cloud environments
+            tls: {
+                rejectUnauthorized: false
+            }
         });
 
         // 4. Draft the Email Template
@@ -255,13 +259,13 @@ export const updatePassword = async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
 
-        // 1. Fetch user by id verified from auth token middleware
-        const user = await User.findById(req.user?._id || req.user?._id);
+        // Fetch user by id verified from auth token middleware
+        const user = await User.findById(req.user?._id);
         if (!user) {
             return res.status(404).json({ message: "User account not found." });
         }
 
-        // 2. If user registered via Google only and hasn't set a password yet, bypass match verification
+        // If user registered via Google only and hasn't set a password yet, bypass match verification
         if (user.password) {
             const isMatch = await bcrypt.compare(currentPassword, user.password);
             if (!isMatch) {
@@ -269,7 +273,7 @@ export const updatePassword = async (req, res) => {
             }
         }
 
-        // 3. Encrypt and pin the new password string
+        // Encrypt and pin the new password string
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(newPassword, salt);
 
