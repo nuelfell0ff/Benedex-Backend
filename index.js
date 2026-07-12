@@ -57,6 +57,8 @@ const io = new Server(server, {
 
 // Middlewares
 
+app.set('trust proxy', 1);
+
 app.use('/api', globalLimiter);
 
 app.use(
