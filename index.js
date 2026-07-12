@@ -6,8 +6,10 @@ import { Server } from "socket.io";
 
 
 
+
 import connectDB from "./config/db.js";
 import { parseJsonBody } from "./middleware/jsonBodyMiddleware.js";
+import { globalLimiter } from './middleware/rateLimiter.js';
 
 import authRoutes from "./routes/authRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
@@ -54,6 +56,8 @@ const io = new Server(server, {
 
 
 // Middlewares
+
+app.use('/api', globalLimiter);
 
 app.use(
 

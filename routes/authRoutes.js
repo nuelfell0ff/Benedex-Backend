@@ -7,7 +7,8 @@ import {
     resetPassword,
     updatePassword // 1. Import your new controller method here
 } from "../controllers/authController.js";
-import { protect } from "../middleware/authMiddleware.js"; // 2. Import your token protection middleware
+import { protect } from "../middleware/authMiddleware.js";
+import { authLimiter } from '../middleware/rateLimiter.js'; 
 
 const router = express.Router();
 
