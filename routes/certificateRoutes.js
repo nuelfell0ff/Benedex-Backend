@@ -1,3 +1,4 @@
+// routes/certificateRoutes.js
 import express from "express";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
@@ -5,6 +6,7 @@ import Certificate from "../models/Certificate.js";
 import Module from "../models/Module.js";
 import Lesson from "../models/Lesson.js";
 import LessonProgress from "../models/LessonProgress.js";
+import { getCertificateByUniqueId } from "../controllers/certificateController.js";
 import { protect } from "../middleware/authMiddleware.js"; // Adjust based on your auth middleware path
 
 const router = express.Router();
@@ -161,5 +163,11 @@ router.get("/verify-payment/:reference", protect, async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server verification fault error." });
   }
 });
+
+/* -------------------------------------------------------------
+   4. PUBLIC VERIFICATION (Used by public scanning/checking tools)
+------------------------------------------------------------- */
+// Note: No protect middleware here so anyone can verify certificates!
+router.get("/verify/:certificateId", getCertificateByUniqueId);
 
 export default router;
