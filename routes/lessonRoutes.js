@@ -1,19 +1,13 @@
 import express from "express";
-
 import {
   createLesson,
   getModuleLessons,
   completeLesson,
   getLessonProgress
 } from "../controllers/lessonController.js";
-
-import {
-  protect,
-  authorize
-} from "../middleware/authMiddleware.js";
+import { protect, authorize } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-
 
 // CREATE LESSON
 router.post(
@@ -23,14 +17,12 @@ router.post(
   createLesson
 );
 
-
 // GET LESSONS BY MODULE
 router.get(
   "/module/:moduleId",
   protect,
   getModuleLessons
 );
-
 
 // COMPLETE LESSON
 router.post(
@@ -39,7 +31,6 @@ router.post(
   authorize("student"),
   completeLesson
 );
-
 
 // GET PROGRESS
 router.get(

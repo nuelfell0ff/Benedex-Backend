@@ -5,13 +5,22 @@ import {
   getSingleCourse,
   enrollCourse,
   getStudentCourses,
-  getInstructorCourses // Imported the new function here
+  getInstructorCourses,
+  generateCourseFromSyllabus
 } from "../controllers/courseController.js";
 import { protect, authorize } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Create Course
+// AI Syllabus Course Generator (Admin Only)
+router.post(
+  "/admin/generate-from-syllabus",
+  protect,
+  authorize("admin"),
+  generateCourseFromSyllabus
+);
+
+// Create Course (Manual)
 router.post("/", protect, authorize("admin", "instructor"), createCourse);
 
 // Get all courses
@@ -26,7 +35,7 @@ router.post("/enroll/:courseId", protect, authorize("student"), enrollCourse);
 // Get student courses
 router.get("/student/registered", protect, authorize("student"), getStudentCourses);
 
-// NEW: Get instructor courses roster mapping route
+// Get instructor courses roster mapping route
 router.get("/instructor/my-courses", protect, authorize("instructor"), getInstructorCourses);
 
 export default router;

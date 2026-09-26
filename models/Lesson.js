@@ -4,48 +4,66 @@ const lessonSchema = new mongoose.Schema(
   {
     title: {
       type: String,
-      required: true
+      required: true,
     },
 
     type: {
       type: String,
       enum: ["video", "text", "document"],
-      required: true
+      required: true,
+      default: "text",
     },
 
     content: {
       type: String,
-      default: ""
+      default: "",
     },
 
     videoUrl: {
       type: String,
-      default: ""
+      default: "",
     },
 
     documentUrl: {
       type: String,
-      default: ""
+      default: "",
+    },
+
+    // Unsplash stock photo URL fetched during AI syllabus generation
+    illustrationUrl: {
+      type: String,
+      default: "",
+    },
+
+    // Attribution requirements for Unsplash Production API guidelines
+    photographerName: {
+      type: String,
+      default: "",
+    },
+
+    photographerUrl: {
+      type: String,
+      default: "",
     },
 
     module: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Module",
-      required: true
+      required: true,
     },
 
     order: {
       type: Number,
-      required: true
+      required: true,
     },
 
     isPreview: {
       type: Boolean,
-      default: false
-    }
+      default: false,
+    },
   },
   {
-    timestamps: true
+    timestamps: true,
   }
 );
 

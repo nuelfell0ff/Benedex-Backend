@@ -9,20 +9,21 @@ export const createLesson = async (req, res) => {
   try {
     const lesson = await Lesson.create({
       title: req.body.title,
-      type: req.body.type,
+      type: req.body.type || "text",
       content: req.body.content,
       videoUrl: req.body.videoUrl,
       documentUrl: req.body.documentUrl,
+      illustrationUrl: req.body.illustrationUrl,
+      photographerName: req.body.photographerName,
+      photographerUrl: req.body.photographerUrl,
       module: req.body.module,
       order: req.body.order,
-      isPreview: req.body.isPreview || false
+      isPreview: req.body.isPreview || false,
     });
 
     res.status(201).json(lesson);
   } catch (error) {
-    res.status(500).json({
-      message: error.message
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -30,14 +31,12 @@ export const createLesson = async (req, res) => {
 export const getModuleLessons = async (req, res) => {
   try {
     const lessons = await Lesson.find({
-      module: req.params.moduleId
+      module: req.params.moduleId,
     }).sort({ order: 1 });
 
     res.json(lessons);
   } catch (error) {
-    res.status(500).json({
-      message: error.message
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -49,20 +48,20 @@ export const completeLesson = async (req, res) => {
 
     const existing = await LessonProgress.findOne({
       student: studentId,
-      lesson: lessonId
+      lesson: lessonId,
     });
 
     if (existing) {
       return res.status(200).json({
         message: "Lesson already completed",
-        progress: existing
+        progress: existing,
       });
     }
 
     const progress = await LessonProgress.create({
       student: studentId,
       lesson: lessonId,
-      completed: true
+      completed: true,
     });
 
     const lesson = await Lesson.findById(lessonId).populate("module");
@@ -71,12 +70,12 @@ export const completeLesson = async (req, res) => {
       student: studentId,
       type: "lesson_completed",
       title: `Completed ${lesson?.title || "Lesson"}`,
-      points: 5
+      points: 5,
     });
 
     res.json({
       message: "Lesson completed",
-      progress
+      progress,
     });
   } catch (error) {
     console.log(error);
@@ -88,14 +87,11 @@ export const completeLesson = async (req, res) => {
 export const getLessonProgress = async (req, res) => {
   try {
     const progress = await LessonProgress.find({
-      student: req.user._id
+      student: req.user._id,
     }).populate("lesson");
 
-    console.log("Progress sent:", progress);
     res.json(progress);
   } catch (error) {
-    res.status(500).json({
-      message: error.message
-    });
+    res.status(500).json({ message: error.message });
   }
 };
