@@ -1,56 +1,13 @@
 import Course from "../models/Course.js";
-import Module from "../models/Module.js";
-import Lesson from "../models/Lesson.js";
 import Progress from "../models/Progress.js";
 import { applyXpToUser, recordLearningActivity } from "../utils/studentLearning.js";
 import sendPushNotification from "../utils/sendPushNotification.js";
 import { logAdminActivity } from "../middleware/auditLogger.js";
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import axios from "axios";
-
-// Helper: Slugify string
-const slugify = (text) => {
-  return text
-    .toLowerCase()
-    .replace(/[^\w ]+/g, "")
-    .replace(/ +/g, "-");
-};
-
-// Helper: Fetch Unsplash Photo
-const fetchUnsplashImage = async (query) => {
-  try {
-    const response = await axios.get("https://api.unsplash.com/search/photos", {
-      params: {
-        query,
-        per_page: 1,
-        orientation: "landscape",
-      },
-      headers: {
-        Authorization: `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}`,
-      },
-    });
-
-    if (response.data.results && response.data.results.length > 0) {
-      const photo = response.data.results[0];
-      return {
-        url: photo.urls.regular,
-        photographerName: photo.user.name,
-        photographerUrl: photo.user.links.html,
-      };
-    }
-  } catch (error) {
-    console.error(`Unsplash image query failed for "${query}":`, error.message);
-  }
-
-  return {
-    url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop",
-    photographerName: "Unsplash",
-    photographerUrl: "https://unsplash.com",
-  };
-};
+import { generateAndSaveModules } from "./moduleController.js";
+import { fetchUnsplashImage, callOpenRouterAI, slugify } from "../utils/aiHelpers.js";
 
 // ==========================================
-// AI SYLLABUS COURSE GENERATOR (ADMIN ONLY)
+// AI SYLLABUS COURSE GENERATOR (ENTRY POINT)
 // ==========================================
 export const generateCourseFromSyllabus = async (req, res) => {
   try {
@@ -60,77 +17,42 @@ export const generateCourseFromSyllabus = async (req, res) => {
       return res.status(400).json({ message: "Syllabus text is required." });
     }
 
-    if (!process.env.BENEDEX_AI_API_KEY) {
-      return res.status(500).json({ message: "BENEDEX_AI_API_KEY is missing in backend environment." });
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ message: "OPENROUTER_API_KEY is missing in backend environment variables." });
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.BENEDEX_AI_API_KEY);
-
-    // Schema for Course Architecture
-    const outlineSchema = {
-      type: SchemaType.OBJECT,
-      properties: {
-        title: { type: SchemaType.STRING },
-        description: { type: SchemaType.STRING },
-        suggestedTools: {
-          type: SchemaType.ARRAY,
-          items: { type: SchemaType.STRING },
-        },
-        modules: {
-          type: SchemaType.ARRAY,
-          items: {
-            type: SchemaType.OBJECT,
-            properties: {
-              title: { type: SchemaType.STRING },
-              description: { type: SchemaType.STRING },
-              month: { type: SchemaType.NUMBER },
-              lessons: {
-                type: SchemaType.ARRAY,
-                items: {
-                  type: SchemaType.OBJECT,
-                  properties: {
-                    title: { type: SchemaType.STRING },
-                    summary: { type: SchemaType.STRING },
-                    imageSearchTerm: {
-                      type: SchemaType.STRING,
-                      description: "2-3 word photographic search keyword for Unsplash",
-                    },
-                  },
-                  required: ["title", "summary", "imageSearchTerm"],
-                },
-              },
-            },
-            required: ["title", "lessons"],
-          },
-        },
-      },
-      required: ["title", "description", "modules"],
-    };
-
-    // Stage 1: Generate Curriculum Outline
-    const outlineModel = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: outlineSchema,
-      },
-    });
-
+    // Step 1: Prompt AI for Course Overview & Module Skeleton Outline
     const outlinePrompt = `
-      You are an expert curriculum designer. Break down this syllabus into a course structure with modules and lessons.
-      Assign each module a month number starting at 1. Provide an image search keyword for each lesson.
+      You are an elite academic curriculum designer. Analyze the syllabus text below and output the overarching course metadata and an outline of all modules and their respective lesson titles.
+      Return ONLY a valid raw JSON object starting with '{' and ending with '}'. Do not wrap in markdown code blocks.
+
+      REQUIRED JSON SCHEMA:
+      {
+        "title": "Comprehensive Course Title",
+        "description": "Extensive course summary",
+        "suggestedTools": ["Tool 1", "Tool 2"],
+        "modules": [
+          {
+            "title": "Module Title",
+            "description": "Module overview",
+            "month": 1,
+            "lessonTitles": ["Lesson Title 1", "Lesson Title 2", "Lesson Title 3", "Lesson Title 4"]
+          }
+        ]
+      }
 
       SYLLABUS:
       ${syllabusText}
     `;
 
-    const outlineResult = await outlineModel.generateContent(outlinePrompt);
-    const parsedOutline = JSON.parse(outlineResult.response.text());
+    console.log("Step 1: Generating course outline...");
+    const courseOutline = await callOpenRouterAI(outlinePrompt, apiKey);
 
-    // Stage 2: Create Course DB Record
-    const courseCover = await fetchUnsplashImage(parsedOutline.title);
+    // Step 2: Create Course DB Record
+    const courseCover = await fetchUnsplashImage(courseOutline.title);
 
-    let baseSlug = slugify(parsedOutline.title);
+    let baseSlug = slugify(courseOutline.title);
     let uniqueSlug = baseSlug;
     let count = 1;
     while (await Course.findOne({ slug: uniqueSlug })) {
@@ -139,78 +61,39 @@ export const generateCourseFromSyllabus = async (req, res) => {
     }
 
     const course = await Course.create({
-      title: parsedOutline.title,
+      title: courseOutline.title,
       slug: uniqueSlug,
-      description: parsedOutline.description,
+      description: courseOutline.description,
       instructor: req.user._id,
       duration: duration || "3 Months",
       price: price || 0,
-      tools: tools || parsedOutline.suggestedTools || [],
+      tools: tools || courseOutline.suggestedTools || [],
       image: courseCover.url,
       createdByAI: true,
       status: "published",
     });
 
-    // Stage 3: Generate and Save Modules & Lessons sequentially into relational MongoDB Collections
-    const textModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-    let moduleOrder = 1;
-    for (const modData of parsedOutline.modules) {
-      const createdModule = await Module.create({
-        title: modData.title,
-        description: modData.description || "",
-        course: course._id,
-        month: modData.month || 1,
-        order: moduleOrder++,
-      });
-
-      let lessonOrder = 1;
-      for (const lesData of modData.lessons) {
-        const lessonPrompt = `
-          Write a detailed educational lesson for the topic: "${lesData.title}".
-          Lesson Context: ${lesData.summary}.
-
-          Requirements:
-          - Write comprehensive markdown text using headers, bullet points, and practical examples.
-          - Conclude with 3 key takeaway bullet points.
-        `;
-
-        const lessonResult = await textModel.generateContent(lessonPrompt);
-        const markdownContent = lessonResult.response.text();
-
-        const imageData = await fetchUnsplashImage(lesData.imageSearchTerm || lesData.title);
-
-        await Lesson.create({
-          title: lesData.title,
-          type: "text",
-          content: markdownContent,
-          illustrationUrl: imageData.url,
-          photographerName: imageData.photographerName,
-          photographerUrl: imageData.photographerUrl,
-          module: createdModule._id,
-          order: lessonOrder++,
-          isPreview: lessonOrder === 2, // Make first lesson previewable
-        });
-      }
-    }
+    // Step 3: Delegate module creation to moduleController
+    console.log(`Step 2: Course created (${course._id}). Handing off to module controller...`);
+    await generateAndSaveModules(course._id, courseOutline.title, courseOutline.modules, apiKey);
 
     if (req.user && req.user.role === "admin") {
       await logAdminActivity(
         req,
         "COURSES",
         "CREATE",
-        `AI generated full course structure for: "${course.title}"`
+        `AI generated complete multi-controller course structure for: "${course.title}"`
       );
     }
 
     res.status(201).json({
       success: true,
-      message: "Course, modules, and lessons generated successfully!",
+      message: "Comprehensive course generated successfully via multi-controller pipeline!",
       courseId: course._id,
       course,
     });
   } catch (error) {
-    console.error("AI Course Generation Error:", error);
+    console.error("AI Course Generation Error:", error.response?.data || error.message);
     res.status(500).json({ message: "Failed to generate course", error: error.message });
   }
 };

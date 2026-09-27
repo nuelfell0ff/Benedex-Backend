@@ -4,12 +4,9 @@ import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
 
-
-
-
 import connectDB from "./config/db.js";
 import { parseJsonBody } from "./middleware/jsonBodyMiddleware.js";
-import { globalLimiter } from './middleware/rateLimiter.js';
+import { globalLimiter } from "./middleware/rateLimiter.js";
 
 import authRoutes from "./routes/authRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
@@ -38,60 +35,79 @@ import notification from "./routes/notifications.js";
 
 dotenv.config();
 
-connectDB();
-
 const app = express();
 
 const server = http.createServer(app);
 
+const PORT = process.env.PORT || 5000;
+
+
+// --------------------------------------------------
+// CORS
+// --------------------------------------------------
+
+const frontendUrl =
+    process.env.FRONTEND_URL || "http://localhost:5173";
+
+app.use(
+    cors({
+        origin: frontendUrl,
+        methods: [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS",
+        ],
+        allowedHeaders: [
+            "Content-Type",
+            "Authorization",
+        ],
+    })
+);
+
+
+// --------------------------------------------------
+// Socket.IO
+// --------------------------------------------------
+
 const io = new Server(server, {
-
     cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
-
+        origin: frontendUrl,
+        methods: ["GET", "POST"],
+    },
 });
 
 
-
+// --------------------------------------------------
 // Middlewares
+// --------------------------------------------------
 
-app.set('trust proxy', 1);
+app.set("trust proxy", 1);
 
-app.use('/api', globalLimiter);
 
+// Rate limiter comes AFTER CORS.
+// OPTIONS requests are skipped inside rateLimiter.js.
+app.use("/api", globalLimiter);
+
+
+// Keep your existing custom JSON handling.
 app.use(
-
     express.text({
-
         type: [
             "application/json",
-            "application/*+json"
-        ]
-
+            "application/*+json",
+        ],
     })
-
 );
 
-app.use(
-    parseJsonBody
-);
-
-app.use(
-
-    cors({
-
-        origin: "*"
-
-    })
-
-);
+app.use(parseJsonBody);
 
 
-
-
+// --------------------------------------------------
 // Routes
+// --------------------------------------------------
 
 app.use(
     "/api/auth",
@@ -183,48 +199,56 @@ app.use(
     certificateRoutes
 );
 
-app.use("/api/instructor", instructorRoutes);
-
-app.use('/api', searchRoutes);
-
-app.use('/api/ai', aiRoutes);
-
-app.use("/api/notifications", notification);
-
-
 app.use(
-    notFound
+    "/api/instructor",
+    instructorRoutes
 );
 
 app.use(
-    errorHandler
+    "/api",
+    searchRoutes
+);
+
+app.use(
+    "/api/ai",
+    aiRoutes
+);
+
+app.use(
+    "/api/notifications",
+    notification
 );
 
 
+// --------------------------------------------------
 // Home route
+// --------------------------------------------------
 
 app.get(
     "/",
     (req, res) => {
-
         res.json({
-
-            message: "Benedex API running 🚀"
-
+            message: "Benedex API running 🚀",
         });
-
     }
 );
 
 
+// --------------------------------------------------
+// 404 + Error handling
+// --------------------------------------------------
+
+app.use(notFound);
+
+app.use(errorHandler);
 
 
-// Socket.IO
+// --------------------------------------------------
+// Socket.IO events
+// --------------------------------------------------
 
 io.on(
-
     "connection",
-
     (socket) => {
 
         console.log(
@@ -232,49 +256,33 @@ io.on(
         );
 
 
-
         socket.on(
-
             "join-room",
-
             (room) => {
 
-                socket.join(
-                    room
-                );
+                socket.join(room);
 
             }
-
         );
 
 
-
         socket.on(
-
             "send-message",
-
             (data) => {
 
                 io.to(
                     data.room
                 ).emit(
-
                     "receive-message",
-
                     data
-
                 );
 
             }
-
         );
 
 
-
         socket.on(
-
             "disconnect",
-
             () => {
 
                 console.log(
@@ -282,34 +290,45 @@ io.on(
                 );
 
             }
-
         );
 
     }
-
 );
 
 
-
-
+// --------------------------------------------------
 // Start server
+// --------------------------------------------------
 
-const PORT =
-    process.env.PORT || 5000;
+const startServer = async () => {
 
+    try {
 
-server.listen(
+        await connectDB();
 
-    PORT,
+        server.listen(
+            PORT,
+            () => {
 
-    () => {
+                console.log(
+                    `🚀 Server running on port ${PORT}`
+                );
 
-        console.log(
-
-            `🚀 Server running on port ${PORT}`
-
+            }
         );
+
+    } catch (error) {
+
+        console.error(
+            "❌ Server startup failed:",
+            error
+        );
+
+        process.exit(1);
 
     }
 
-);
+};
+
+
+startServer();
