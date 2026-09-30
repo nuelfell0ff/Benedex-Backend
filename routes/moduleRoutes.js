@@ -1,14 +1,20 @@
 import express from "express";
+
 import {
   createModule,
   getCourseModules,
-  getAllModules
+  getAllModules,
+  getAdminModuleDetails,
+  updateModule,
 } from "../controllers/moduleController.js";
-import { protect, authorize } from "../middleware/authMiddleware.js";
+
+import {
+  protect,
+  authorize,
+} from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Create module
 router.post(
   "/",
   protect,
@@ -16,17 +22,30 @@ router.post(
   createModule
 );
 
-// Get all modules
+router.get(
+  "/admin/:id",
+  protect,
+  authorize("admin"),
+  getAdminModuleDetails
+);
+
+router.put(
+  "/admin/:id",
+  protect,
+  authorize("admin"),
+  updateModule
+);
+
 router.get(
   "/",
   protect,
   getAllModules
 );
 
-// Get modules by course with drip logic
 router.get(
   "/:courseId",
   protect,
+  authorize("student"),
   getCourseModules
 );
 

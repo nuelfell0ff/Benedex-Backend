@@ -1,15 +1,21 @@
 import express from "express";
+
 import {
   createLesson,
   getModuleLessons,
   completeLesson,
-  getLessonProgress
+  getLessonProgress,
+  getAdminLessonDetails,
+  updateLesson,
 } from "../controllers/lessonController.js";
-import { protect, authorize } from "../middleware/authMiddleware.js";
+
+import {
+  protect,
+  authorize,
+} from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// CREATE LESSON
 router.post(
   "/",
   protect,
@@ -17,14 +23,27 @@ router.post(
   createLesson
 );
 
-// GET LESSONS BY MODULE
+router.get(
+  "/admin/:id",
+  protect,
+  authorize("admin"),
+  getAdminLessonDetails
+);
+
+router.put(
+  "/admin/:id",
+  protect,
+  authorize("admin"),
+  updateLesson
+);
+
 router.get(
   "/module/:moduleId",
   protect,
+  authorize("student"),
   getModuleLessons
 );
 
-// COMPLETE LESSON
 router.post(
   "/complete/:lessonId",
   protect,
@@ -32,10 +51,10 @@ router.post(
   completeLesson
 );
 
-// GET PROGRESS
 router.get(
   "/progress",
   protect,
+  authorize("student"),
   getLessonProgress
 );
 

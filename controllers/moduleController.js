@@ -1,60 +1,136 @@
 import Module from "../models/Module.js";
-import Progress from "../models/Progress.js";
 import Course from "../models/Course.js";
-import { recordLearningActivity } from "../utils/studentLearning.js";
-import { generateAndSaveLessons } from "./lessonController.js";
+import Lesson from "../models/Lesson.js";
 
-// ==========================================
-// AI MODULE PIPELINE GENERATOR HELPER
-// ==========================================
+import {
+  recordLearningActivity,
+} from "../utils/studentLearning.js";
+
+import {
+  generateAndSaveLessons,
+} from "./lessonController.js";
+
+import {
+  generateAndSaveQuiz,
+} from "./quizController.js";
+
+const ensureAdmin = (req, res) => {
+  if (!req.user || req.user.role !== "admin") {
+    res.status(403).json({
+      message: "Administrator access required.",
+    });
+
+    return false;
+  }
+
+  return true;
+};
+
 export const generateAndSaveModules = async (
   courseId,
   courseTitle,
   modulesData,
-  apiKey
+  apiKey,
+  onProgress = () => {}
 ) => {
   let moduleOrder = 1;
 
   for (const modData of modulesData || []) {
-    console.log(
-      `-> Creating Module ${moduleOrder}: "${modData.title}"...`
+    const currentModule = moduleOrder;
+
+    onProgress(
+      `-> Creating Module ${currentModule}: "${modData.title}"...`,
+      "step"
     );
 
-    const createdModule = await Module.create({
-      title: modData.title,
-      description: modData.description || "",
-      course: courseId,
-      month: modData.month || moduleOrder,
-      order: moduleOrder++,
-    });
+    const createdModule =
+      await Module.create({
+        title: modData.title,
+        description:
+          modData.description || "",
+        course: courseId,
+        month:
+          modData.month ||
+          currentModule,
+        order: moduleOrder++,
+      });
 
-    // Delegate detailed lesson generation and markdown writing
-    // to lessonController
+    onProgress(
+      `   + Module created: ${createdModule._id}`,
+      "success"
+    );
+
+    onProgress(
+      `   -> Generating lessons for "${modData.title}"...`,
+      "step"
+    );
+
     await generateAndSaveLessons(
       createdModule._id,
       courseTitle,
       modData.title,
       modData.lessonTitles,
-      apiKey
+      apiKey,
+      onProgress
+    );
+
+    onProgress(
+      `   + Lessons generated for "${modData.title}"`,
+      "success"
+    );
+
+    onProgress(
+      `   -> Generating quiz for "${modData.title}"...`,
+      "step"
+    );
+
+    const quiz =
+      await generateAndSaveQuiz(
+        createdModule._id,
+        courseTitle,
+        modData.title,
+        apiKey,
+        onProgress
+      );
+
+    if (quiz) {
+      onProgress(
+        `   + Quiz generated for "${modData.title}"`,
+        "success"
+      );
+    } else {
+      onProgress(
+        `   ! Quiz could not be generated for "${modData.title}". Continuing to next module.`,
+        "warning"
+      );
+    }
+
+    onProgress(
+      `   ✓ Module ${currentModule} completed: "${modData.title}"`,
+      "success"
     );
   }
 };
 
-// ==========================================
-// CREATE MODULE (STANDARD MANUAL)
-// ==========================================
-export const createModule = async (req, res) => {
+export const createModule = async (
+  req,
+  res
+) => {
   try {
-    const moduleData = await Module.create({
-      title: req.body.title,
-      description: req.body.description,
-      course: req.body.course,
-      month: req.body.month,
-      order: req.body.order,
-      content: req.body.content,
-    });
+    const moduleData =
+      await Module.create({
+        title: req.body.title,
+        description:
+          req.body.description,
+        course: req.body.course,
+        month: req.body.month,
+        order: req.body.order,
+        content: req.body.content,
+      });
 
-    res.status(201).json(moduleData);
+    res.status(201).json(
+      moduleData
+    );
   } catch (error) {
     res.status(500).json({
       message: error.message,
@@ -62,17 +138,21 @@ export const createModule = async (req, res) => {
   }
 };
 
-// ==========================================
-// GET ALL MODULES
-// ==========================================
-export const getAllModules = async (req, res) => {
+export const getAllModules = async (
+  req,
+  res
+) => {
   try {
-    const modules = await Module.find()
-      .populate("course", "title")
-      .sort({
-        month: 1,
-        order: 1,
-      });
+    const modules =
+      await Module.find()
+        .populate(
+          "course",
+          "title status"
+        )
+        .sort({
+          month: 1,
+          order: 1,
+        });
 
     res.json(modules);
   } catch (error) {
@@ -82,35 +162,164 @@ export const getAllModules = async (req, res) => {
   }
 };
 
-// ==========================================
-// GET MODULES FOR A SPECIFIC COURSE
-// ==========================================
-// IMPORTANT:
-// This endpoint returns ALL modules belonging to the course.
-//
-// Module locking is handled by the frontend using quiz progress.
-// We do NOT filter modules here based on assignments/months.
-export const getCourseModules = async (req, res) => {
+export const getAdminModuleDetails =
+  async (req, res) => {
+    try {
+      if (!ensureAdmin(req, res)) {
+        return;
+      }
+
+      const module =
+        await Module.findById(
+          req.params.id
+        )
+          .populate(
+            "course",
+            "title slug status"
+          )
+          .lean();
+
+      if (!module) {
+        return res.status(404).json({
+          message: "Module not found.",
+        });
+      }
+
+      const lessons =
+        await Lesson.find({
+          module: module._id,
+        })
+          .sort({
+            order: 1,
+          })
+          .lean();
+
+      res.status(200).json({
+        module,
+        lessons,
+      });
+    } catch (error) {
+      console.error(
+        "Admin module details error:",
+        error
+      );
+
+      res.status(500).json({
+        message: error.message,
+      });
+    }
+  };
+
+export const updateModule =
+  async (req, res) => {
+    try {
+      if (!ensureAdmin(req, res)) {
+        return;
+      }
+
+      const allowedUpdates = {};
+
+      if (
+        typeof req.body.title ===
+        "string"
+      ) {
+        allowedUpdates.title =
+          req.body.title.trim();
+      }
+
+      if (
+        typeof req.body.description ===
+        "string"
+      ) {
+        allowedUpdates.description =
+          req.body.description;
+      }
+
+      if (
+        req.body.month !== undefined
+      ) {
+        allowedUpdates.month =
+          Number(req.body.month) || 1;
+      }
+
+      if (
+        req.body.order !== undefined
+      ) {
+        allowedUpdates.order =
+          Number(req.body.order) || 1;
+      }
+
+      const module =
+        await Module.findByIdAndUpdate(
+          req.params.id,
+          {
+            $set: allowedUpdates,
+          },
+          {
+            new: true,
+            runValidators: true,
+          }
+        ).populate(
+          "course",
+          "title status"
+        );
+
+      if (!module) {
+        return res.status(404).json({
+          message: "Module not found.",
+        });
+      }
+
+      res.status(200).json({
+        message:
+          "Module updated successfully.",
+        module,
+      });
+    } catch (error) {
+      console.error(
+        "Update module error:",
+        error
+      );
+
+      res.status(500).json({
+        message: error.message,
+      });
+    }
+  };
+
+export const getCourseModules = async (
+  req,
+  res
+) => {
   try {
-    const modules = await Module.find({
-      course: req.params.courseId,
-    }).sort({
-      month: 1,
-      order: 1,
-    });
+    const course =
+      await Course.findOne({
+        _id: req.params.courseId,
+        status: "published",
+      }).select(
+        "_id title status"
+      );
 
-    // Record learning activity when the student opens a course
+    if (!course) {
+      return res.status(404).json({
+        message:
+          "Course not found or is not currently published.",
+      });
+    }
+
+    const modules =
+      await Module.find({
+        course: course._id,
+      }).sort({
+        month: 1,
+        order: 1,
+      });
+
     if (modules.length > 0) {
-      const course = await Course.findById(
-        req.params.courseId
-      ).select("title");
-
       await recordLearningActivity({
         student: req.user._id,
         type: "lesson_started",
-        title: `Started lesson in ${
-          course?.title || "a course"
-        }`,
+        title: `Started lesson in ${course.title}`,
         points: 0,
       });
     }

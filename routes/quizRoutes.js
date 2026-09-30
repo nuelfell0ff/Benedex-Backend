@@ -1,29 +1,69 @@
 import express from "express";
+
 import {
   createQuiz,
   getModuleQuiz,
   getQuizById,
   submitQuiz,
-  getQuizProgress, // 1. Import your new function here
+  getQuizProgress,
+  getAdminQuizDetails,
+  updateQuiz,
 } from "../controllers/quizController.js";
-import { protect, authorize } from "../middleware/authMiddleware.js";
+
+import {
+  protect,
+  authorize,
+} from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-/* CREATE */
-router.post("/", protect, authorize("admin", "instructor"), createQuiz);
+router.post(
+  "/",
+  protect,
+  authorize("admin", "instructor"),
+  createQuiz
+);
 
-/* PROGRESS TRACKING */
-// 2. Place this ABOVE the dynamic /:quizId route!
-router.get("/progress", protect, authorize("student"), getQuizProgress);
+router.get(
+  "/admin/:quizId",
+  protect,
+  authorize("admin"),
+  getAdminQuizDetails
+);
 
-/* GET BY MODULE */
-router.get("/module/:moduleId", protect, getModuleQuiz);
+router.put(
+  "/admin/:quizId",
+  protect,
+  authorize("admin"),
+  updateQuiz
+);
 
-/* GET BY QUIZ ID */
-router.get("/:quizId", protect, getQuizById);
+router.get(
+  "/progress",
+  protect,
+  authorize("student"),
+  getQuizProgress
+);
 
-/* SUBMIT */
-router.post("/submit/:quizId", protect, authorize("student"), submitQuiz);
+router.get(
+  "/module/:moduleId",
+  protect,
+  authorize("student"),
+  getModuleQuiz
+);
+
+router.get(
+  "/:quizId",
+  protect,
+  authorize("student"),
+  getQuizById
+);
+
+router.post(
+  "/submit/:quizId",
+  protect,
+  authorize("student"),
+  submitQuiz
+);
 
 export default router;

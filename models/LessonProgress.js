@@ -24,6 +24,12 @@ const lessonProgressSchema = new mongoose.Schema(
   }
 );
 
+// A student can only have one progress record per lesson
+lessonProgressSchema.index(
+  { student: 1, lesson: 1 },
+  { unique: true }
+);
+
 const LessonProgress = mongoose.model(
   "LessonProgress",
   lessonProgressSchema

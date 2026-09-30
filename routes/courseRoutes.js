@@ -1,18 +1,26 @@
 import express from "express";
+
 import {
   createCourse,
   getCourses,
+  getPublishedCourses,
   getSingleCourse,
   enrollCourse,
   getStudentCourses,
   getInstructorCourses,
-  generateCourseFromSyllabus
+  generateCourseFromSyllabus,
+  getAdminCourseStructure,
+  updateCourse,
+  publishCourse,
 } from "../controllers/courseController.js";
-import { protect, authorize } from "../middleware/authMiddleware.js";
+
+import {
+  protect,
+  authorize,
+} from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// AI Syllabus Course Generator (Admin Only)
 router.post(
   "/admin/generate-from-syllabus",
   protect,
@@ -20,22 +28,73 @@ router.post(
   generateCourseFromSyllabus
 );
 
-// Create Course (Manual)
-router.post("/", protect, authorize("admin", "instructor"), createCourse);
+router.get(
+  "/admin/all",
+  protect,
+  authorize("admin"),
+  getCourses
+);
 
-// Get all courses
-router.get("/", getCourses);
+router.get(
+  "/admin/:id/structure",
+  protect,
+  authorize("admin"),
+  getAdminCourseStructure
+);
 
-// Get single course
-router.get("/:id", getSingleCourse);
+router.put(
+  "/admin/:id",
+  protect,
+  authorize("admin"),
+  updateCourse
+);
 
-// Student enroll
-router.post("/enroll/:courseId", protect, authorize("student"), enrollCourse);
+router.patch(
+  "/admin/:id/publish",
+  protect,
+  authorize("admin"),
+  publishCourse
+);
 
-// Get student courses
-router.get("/student/registered", protect, authorize("student"), getStudentCourses);
+router.post(
+  "/",
+  protect,
+  authorize("admin", "instructor"),
+  createCourse
+);
 
-// Get instructor courses roster mapping route
-router.get("/instructor/my-courses", protect, authorize("instructor"), getInstructorCourses);
+router.get(
+  "/",
+  protect,
+  authorize("student"),
+  getPublishedCourses
+);
+
+router.post(
+  "/enroll/:courseId",
+  protect,
+  authorize("student"),
+  enrollCourse
+);
+
+router.get(
+  "/student/registered",
+  protect,
+  authorize("student"),
+  getStudentCourses
+);
+
+router.get(
+  "/instructor/my-courses",
+  protect,
+  authorize("instructor"),
+  getInstructorCourses
+);
+
+router.get(
+  "/:id",
+  protect,
+  getSingleCourse
+);
 
 export default router;
