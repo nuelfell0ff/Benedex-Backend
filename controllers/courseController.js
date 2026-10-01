@@ -629,7 +629,7 @@ export const getCourses = async (
       await Course.find()
         .populate(
           "instructor",
-          "fullName email"
+          "fullName email profileImage role bio rating ratingCount"
         )
         .sort({
           createdAt: -1,
@@ -659,7 +659,7 @@ export const getPublishedCourses =
         })
           .populate(
             "instructor",
-            "fullName email profileImage"
+            "fullName email profileImage role bio rating ratingCount"
           )
           .sort({
             createdAt: -1,
@@ -682,7 +682,10 @@ export const getSingleCourse = async (
       await Course.findOne({
         _id: req.params.id,
         status: "published",
-      });
+      }).populate(
+        "instructor",
+        "fullName name email profileImage image role bio rating ratingCount"
+      );
 
     if (!course) {
       return res.status(404).json({
@@ -693,6 +696,11 @@ export const getSingleCourse = async (
 
     res.json(course);
   } catch (error) {
+    console.error(
+      "Get single course error:",
+      error
+    );
+
     res.status(500).json({
       message: error.message,
     });
@@ -711,7 +719,7 @@ export const getAdminCourseStructure =
           req.params.id
         ).populate(
           "instructor",
-          "fullName email profileImage"
+          "fullName name email profileImage image role bio rating ratingCount"
         );
 
       if (!course) {
@@ -1089,7 +1097,7 @@ export const getStudentCourses =
         })
           .populate(
             "instructor",
-            "fullName profileImage role"
+            "fullName name profileImage image role bio rating ratingCount"
           )
           .select(
             "title instructor status"
@@ -1117,8 +1125,13 @@ export const getInstructorCourses =
             select:
               "fullName profileImage role email",
           })
+          .populate({
+            path: "instructor",
+            select:
+              "fullName name profileImage image role bio rating ratingCount",
+          })
           .select(
-            "title description price duration image status createdByAI students"
+            "title description price duration image status createdByAI students instructor"
           )
           .sort({
             createdAt: -1,

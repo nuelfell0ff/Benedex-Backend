@@ -602,6 +602,20 @@ export const completeLesson =
       const studentId =
         req.user._id;
 
+      if (!lessonId) {
+        return res.status(400).json({
+          message:
+            "Lesson ID is required.",
+        });
+      }
+
+      if (!studentId) {
+        return res.status(401).json({
+          message:
+            "Authentication required.",
+        });
+      }
+
       const lesson =
         await Lesson.findById(
           lessonId
@@ -635,6 +649,13 @@ export const completeLesson =
         });
       }
 
+      /*
+       * Check whether this lesson has
+       * already been completed.
+       *
+       * This makes the endpoint safe to
+       * call multiple times.
+       */
       const existingProgress =
         await LessonProgress.findOne({
           student: studentId,
@@ -647,12 +668,21 @@ export const completeLesson =
       ) {
         return res.status(200).json({
           message:
-            "Lesson already completed",
+            "Lesson already completed.",
           progress:
             existingProgress,
+          alreadyCompleted: true,
         });
       }
 
+      /*
+       * Mark the lesson as completed.
+       *
+       * We use findOneAndUpdate so that
+       * an existing progress document is
+       * updated instead of creating another
+       * one.
+       */
       const progress =
         await LessonProgress.findOneAndUpdate(
           {
@@ -671,21 +701,42 @@ export const completeLesson =
           }
         );
 
-      await recordLearningActivity({
-        student: studentId,
-        type:
-          "lesson_completed",
-        title: `Completed ${
-          lesson.title ||
-          "Lesson"
-        }`,
-        points: 5,
-      });
+      /*
+       * IMPORTANT:
+       *
+       * Recording the learning activity is
+       * secondary to completing the lesson.
+       *
+       * If the activity system fails, the
+       * lesson should STILL remain completed.
+       *
+       * This prevents a tracking/analytics
+       * problem from turning into a failed
+       * "Mark as Complete" request.
+       */
+      try {
+        await recordLearningActivity({
+          student: studentId,
+          type:
+            "lesson_completed",
+          title: `Completed ${
+            lesson.title ||
+            "Lesson"
+          }`,
+          points: 5,
+        });
+      } catch (activityError) {
+        console.error(
+          "Learning activity recording failed after lesson completion:",
+          activityError
+        );
+      }
 
       return res.status(200).json({
         message:
-          "Lesson completed",
+          "Lesson completed successfully.",
         progress,
+        alreadyCompleted: false,
       });
     } catch (error) {
       console.error(

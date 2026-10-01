@@ -7,6 +7,7 @@ const learningActivitySchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+
     type: {
       type: String,
       enum: [
@@ -16,19 +17,23 @@ const learningActivitySchema = new mongoose.Schema(
         "assignment_submitted",
         "module_completed",
         "lesson_started",
+        "lesson_completed",
         "live_class_joined",
         "xp_awarded",
       ],
       required: true,
     },
+
     title: {
       type: String,
       required: true,
     },
+
     points: {
       type: Number,
       default: 0,
     },
+
     isViewed: {
       type: Boolean,
       default: false,
@@ -39,6 +44,9 @@ const learningActivitySchema = new mongoose.Schema(
   }
 );
 
-const LearningActivity = mongoose.model("LearningActivity", learningActivitySchema);
+const LearningActivity = mongoose.model(
+  "LearningActivity",
+  learningActivitySchema
+);
 
 export default LearningActivity;
