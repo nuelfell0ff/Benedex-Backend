@@ -82,30 +82,18 @@ const extractJsonObject = (text) => {
     );
   }
 
-  return text.slice(firstBrace, lastBrace + 1);
+  return text.slice(
+    firstBrace,
+    lastBrace + 1
+  );
 };
 
 // ==========================================
 // REPAIR JSON STRING CONTROL CHARACTERS
 // ==========================================
-//
-// AI models sometimes return actual newlines,
-// tabs, etc. inside JSON strings.
-//
-// We only repair control characters when we
-// are INSIDE a JSON string.
-//
-// NOTE:
-// This is still useful for older/non-structured
-// AI responses.
-//
-// Structured-output lesson generation does NOT
-// rely on this repair logic.
-// ==========================================
 
 const repairJsonStringCharacters = (json) => {
   let result = "";
-
   let insideString = false;
   let escaped = false;
 
@@ -174,8 +162,13 @@ const repairJsonStringCharacters = (json) => {
 // ==========================================
 
 export const parseLLMJson = (rawText) => {
-  if (!rawText || typeof rawText !== "string") {
-    throw new Error("AI returned an empty response.");
+  if (
+    !rawText ||
+    typeof rawText !== "string"
+  ) {
+    throw new Error(
+      "AI returned an empty response."
+    );
   }
 
   let cleaned = rawText.trim();
@@ -238,12 +231,15 @@ export const parseLLMJson = (rawText) => {
       secondError.message
     );
 
-    const match = secondError.message.match(
-      /position (\d+)/
-    );
+    const match =
+      secondError.message.match(
+        /position (\d+)/
+      );
 
     if (match) {
-      const position = Number(match[1]);
+      const position = Number(
+        match[1]
+      );
 
       const start = Math.max(
         0,
@@ -275,26 +271,6 @@ export const parseLLMJson = (rawText) => {
 // ==========================================
 // OPENROUTER AI CALL
 // ==========================================
-//
-// options:
-// {
-//   responseFormat: {
-//     type: "json_schema",
-//     json_schema: {
-//       name: "...",
-//       strict: true,
-//       schema: {...}
-//     }
-//   }
-// }
-//
-// When responseFormat is provided, we use the
-// Llama 3.3 70B model because it supports
-// structured JSON-schema output.
-//
-// Without responseFormat, the normal model
-// fallback system remains active.
-// ==========================================
 
 export const callOpenRouterAI = async (
   prompt,
@@ -304,14 +280,18 @@ export const callOpenRouterAI = async (
   const hasStructuredOutput =
     Boolean(options.responseFormat);
 
-  const candidateModels = hasStructuredOutput
-    ? [
-        "meta-llama/llama-3.3-70b-instruct",
-      ]
-    : [
-        "meta-llama/llama-3.3-70b-instruct",
-        "deepseek/deepseek-r1:free",
-      ];
+  const returnRaw =
+    options.returnRaw === true;
+
+  const candidateModels =
+    hasStructuredOutput
+      ? [
+          "meta-llama/llama-3.3-70b-instruct",
+        ]
+      : [
+          "meta-llama/llama-3.3-70b-instruct",
+          "deepseek/deepseek-r1:free",
+        ];
 
   let rawText = null;
   let lastError = null;
@@ -328,16 +308,13 @@ export const callOpenRouterAI = async (
 
       const requestBody = {
         model: modelSlug,
-
         messages: [
           {
             role: "user",
             content: prompt,
           },
         ],
-
         max_tokens: 16000,
-
         temperature: 0.2,
       };
 
@@ -365,14 +342,11 @@ export const callOpenRouterAI = async (
           headers: {
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
-
             "HTTP-Referer":
               "http://localhost:5173",
-
             "X-Title":
               "Benedex Admin LMS",
           },
-
           timeout: 120000,
         }
       );
@@ -422,9 +396,22 @@ export const callOpenRouterAI = async (
     );
   }
 
-  // ------------------------------------------
-  // Structured output should already be JSON
-  // ------------------------------------------
+  // ==========================================
+  // RAW RESPONSE MODE
+  // ==========================================
+  //
+  // Used by lesson generation.
+  //
+  // The lesson is Markdown/text, NOT JSON.
+  // ==========================================
+
+  if (returnRaw) {
+    return rawText.trim();
+  }
+
+  // ==========================================
+  // STRUCTURED JSON OUTPUT
+  // ==========================================
 
   if (hasStructuredOutput) {
     try {
@@ -438,9 +425,9 @@ export const callOpenRouterAI = async (
     }
   }
 
-  // ------------------------------------------
-  // Normal AI response
-  // ------------------------------------------
+  // ==========================================
+  // NORMAL JSON RESPONSE
+  // ==========================================
 
   return parseLLMJson(rawText);
 };

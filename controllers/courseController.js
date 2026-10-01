@@ -2,6 +2,8 @@ import Course from "../models/Course.js";
 import Progress from "../models/Progress.js";
 import Module from "../models/Module.js";
 import Lesson from "../models/Lesson.js";
+import Quiz from "../models/Quiz.js";
+import CourseGenerationJob from "../models/CourseGenerationJob.js";
 
 import {
   applyXpToUser,
@@ -31,106 +33,149 @@ const ensureAdmin = (req, res) => {
   return true;
 };
 
-const sendGenerationProgress = (
-  res,
-  message,
-  type = "info",
-  data = {}
+const updateGenerationJob = async (
+  jobId,
+  updates
 ) => {
-  if (!res.headersSent) {
-    return;
-  }
-
   try {
-    res.write(
-      `data: ${JSON.stringify({
-        type,
-        message,
-        ...data,
-      })}\n\n`
+    await CourseGenerationJob.findByIdAndUpdate(
+      jobId,
+      {
+        $set: updates,
+      },
+      {
+        new: true,
+      }
     );
   } catch (error) {
     console.error(
-      "Failed to send generation progress:",
+      "Failed to update generation job:",
       error.message
     );
   }
 };
 
-export const generateCourseFromSyllabus = async (
-  req,
-  res
+const getProgressFromMessage = (
+  message,
+  totalModules,
+  completedModules
 ) => {
-  try {
-    const {
-      syllabusText,
-      price,
-      duration,
-      tools,
-    } = req.body;
+  if (
+    message.includes(
+      "Generating course outline"
+    )
+  ) {
+    return 5;
+  }
 
-    if (!syllabusText) {
-      return res.status(400).json({
-        message: "Syllabus text is required.",
-      });
+  if (
+    message.includes(
+      "Course outline generated"
+    )
+  ) {
+    return 10;
+  }
+
+  if (
+    message.includes(
+      "Preparing course cover image"
+    )
+  ) {
+    return 15;
+  }
+
+  if (
+    message.includes(
+      "Draft course created"
+    )
+  ) {
+    return 20;
+  }
+
+  if (
+    message.includes("Module") &&
+    message.includes("completed:")
+  ) {
+    if (totalModules <= 0) {
+      return 90;
     }
 
+    const moduleProgress =
+      (completedModules / totalModules) * 75;
+
+    return Math.min(
+      95,
+      Math.round(20 + moduleProgress)
+    );
+  }
+
+  if (
+    message.includes(
+      "Generating lessons"
+    )
+  ) {
+    if (totalModules <= 0) {
+      return 25;
+    }
+
+    const moduleProgress =
+      (completedModules / totalModules) * 75;
+
+    return Math.min(
+      95,
+      Math.round(20 + moduleProgress)
+    );
+  }
+
+  if (
+    message.includes(
+      "Generating quiz"
+    )
+  ) {
+    if (totalModules <= 0) {
+      return 25;
+    }
+
+    const moduleProgress =
+      (completedModules / totalModules) * 75;
+
+    return Math.min(
+      95,
+      Math.round(20 + moduleProgress)
+    );
+  }
+
+  return null;
+};
+
+const runCourseGeneration = async ({
+  jobId,
+  req,
+  user,
+  syllabusText,
+  price,
+  duration,
+  tools,
+}) => {
+  let course = null;
+
+  try {
     const apiKey =
       process.env.OPENROUTER_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({
-        message:
-          "OPENROUTER_API_KEY is missing in backend environment variables.",
-      });
-    }
-
-    res.status(200);
-
-    res.setHeader(
-      "Content-Type",
-      "text/event-stream"
-    );
-
-    res.setHeader(
-      "Cache-Control",
-      "no-cache, no-transform"
-    );
-
-    res.setHeader(
-      "Connection",
-      "keep-alive"
-    );
-
-    res.setHeader(
-      "X-Accel-Buffering",
-      "no"
-    );
-
-    if (
-      typeof res.flushHeaders ===
-      "function"
-    ) {
-      res.flushHeaders();
-    }
-
-    const sendProgress = (
-      message,
-      type = "info",
-      data = {}
-    ) => {
-      sendGenerationProgress(
-        res,
-        message,
-        type,
-        data
+      throw new Error(
+        "OPENROUTER_API_KEY is missing in backend environment variables."
       );
-    };
+    }
 
-    sendProgress(
-      "Step 1: Generating course outline...",
-      "step"
-    );
+    await updateGenerationJob(jobId, {
+      status: "generating",
+      progress: 5,
+      currentStep:
+        "Generating course outline...",
+      error: null,
+    });
 
     const outlinePrompt = `
 You are an elite academic curriculum designer. Analyze the syllabus text below and output the overarching course metadata and an outline of all modules and their respective lesson titles.
@@ -171,15 +216,16 @@ ${syllabusText}
         apiKey
       );
 
-    sendProgress(
-      `Course outline generated: "${courseOutline.title}"`,
-      "success"
-    );
+    await updateGenerationJob(jobId, {
+      progress: 10,
+      currentStep: `Course outline generated: "${courseOutline.title}"`,
+    });
 
-    sendProgress(
-      "Step 2: Preparing course cover image...",
-      "step"
-    );
+    await updateGenerationJob(jobId, {
+      progress: 15,
+      currentStep:
+        "Preparing course cover image...",
+    });
 
     const courseCover =
       await fetchUnsplashImage(
@@ -202,32 +248,83 @@ ${syllabusText}
       count++;
     }
 
-    const course = await Course.create({
+    course = await Course.create({
       title: courseOutline.title,
       slug: uniqueSlug,
       description:
         courseOutline.description,
-      instructor: req.user._id,
+      instructor: user._id,
       duration:
         duration || "3 Months",
-      price: price || 0,
+      price: Number(price) || 0,
       tools:
-        tools ||
-        courseOutline.suggestedTools ||
-        [],
-      image: courseCover.url,
+        Array.isArray(tools) &&
+        tools.length > 0
+          ? tools
+          : courseOutline.suggestedTools ||
+            [],
+      image: courseCover?.url || "",
       createdByAI: true,
       status: "draft",
     });
 
-    sendProgress(
-      `Step 2: Draft course created (${course._id}). Handing off to module controller...`,
-      "success",
-      {
-        courseId: course._id,
-        status: course.status,
+    await updateGenerationJob(jobId, {
+      course: course._id,
+      progress: 20,
+      currentStep:
+        "Draft course created. Preparing modules...",
+    });
+
+    const totalModules =
+      Array.isArray(
+        courseOutline.modules
+      )
+        ? courseOutline.modules.length
+        : 0;
+
+    let completedModules = 0;
+
+    const sendProgress = async (
+      message,
+      type = "info",
+      data = {}
+    ) => {
+      if (
+        message.includes(
+          "completed:"
+        )
+      ) {
+        completedModules++;
       }
-    );
+
+      const calculatedProgress =
+        getProgressFromMessage(
+          message,
+          totalModules,
+          completedModules
+        );
+
+      const updates = {
+        currentStep: message,
+      };
+
+      if (
+        calculatedProgress !== null
+      ) {
+        updates.progress =
+          calculatedProgress;
+      }
+
+      if (data?.courseId) {
+        updates.course =
+          data.courseId;
+      }
+
+      await updateGenerationJob(
+        jobId,
+        updates
+      );
+    };
 
     await generateAndSaveModules(
       course._id,
@@ -237,9 +334,16 @@ ${syllabusText}
       sendProgress
     );
 
+    await updateGenerationJob(jobId, {
+      status: "generating",
+      progress: 95,
+      currentStep:
+        "Finalizing generated course...",
+    });
+
     if (
-      req.user &&
-      req.user.role === "admin"
+      user &&
+      user.role === "admin"
     ) {
       await logAdminActivity(
         req,
@@ -249,41 +353,234 @@ ${syllabusText}
       );
     }
 
-    sendProgress(
-      `Course generation completed successfully. Draft "${course.title}" is ready for admin review.`,
-      "complete",
-      {
-        course,
-        status: "draft",
-      }
-    );
+    await updateGenerationJob(jobId, {
+      status: "completed",
+      progress: 100,
+      currentStep:
+        `Course generation completed. Draft "${course.title}" is ready for admin review.`,
+      course: course._id,
+      completedAt: new Date(),
+      error: null,
+    });
 
-    res.end();
+    console.log(
+      `AI course generation completed successfully. Job: ${jobId}, Course: ${course._id}`
+    );
   } catch (error) {
     console.error(
-      "AI Course Generation Error:",
+      "Background AI Course Generation Error:",
       error.response?.data ||
         error.message
     );
 
-    if (res.headersSent) {
-      sendGenerationProgress(
-        res,
-        `Course generation failed: ${error.message}`,
-        "error"
-      );
-
-      res.end();
-      return;
-    }
-
-    return res.status(500).json({
-      message:
-        "Failed to generate course",
+    await updateGenerationJob(jobId, {
+      status: "failed",
+      currentStep:
+        "Course generation failed.",
       error: error.message,
+      course:
+        course?._id || null,
+      completedAt: new Date(),
     });
   }
 };
+
+export const generateCourseFromSyllabus =
+  async (req, res) => {
+    try {
+      const {
+        syllabusText,
+        price,
+        duration,
+        tools,
+      } = req.body;
+
+      if (
+        !syllabusText ||
+        !syllabusText.trim()
+      ) {
+        return res.status(400).json({
+          message:
+            "Syllabus text is required.",
+        });
+      }
+
+      const apiKey =
+        process.env.OPENROUTER_API_KEY;
+
+      if (!apiKey) {
+        return res.status(500).json({
+          message:
+            "OPENROUTER_API_KEY is missing in backend environment variables.",
+        });
+      }
+
+      const activeJob =
+        await CourseGenerationJob.findOne(
+          {
+            createdBy: req.user._id,
+            status: {
+              $in: [
+                "pending",
+                "generating",
+              ],
+            },
+          }
+        ).sort({
+          createdAt: -1,
+        });
+
+      if (activeJob) {
+        return res.status(409).json({
+          message:
+            "You already have a course generation in progress.",
+          jobId: activeJob._id,
+          status: activeJob.status,
+        });
+      }
+
+      const job =
+        await CourseGenerationJob.create({
+          createdBy: req.user._id,
+          status: "pending",
+          progress: 0,
+          currentStep:
+            "Preparing course generation...",
+        });
+
+      res.status(202).json({
+        message:
+          "Course generation started in the background.",
+        jobId: job._id,
+        status: job.status,
+      });
+
+      setImmediate(() => {
+        runCourseGeneration({
+          jobId: job._id,
+          req,
+          user: req.user,
+          syllabusText:
+            syllabusText.trim(),
+          price,
+          duration,
+          tools,
+        }).catch(async (error) => {
+          console.error(
+            "Unexpected background generation error:",
+            error
+          );
+
+          await updateGenerationJob(
+            job._id,
+            {
+              status: "failed",
+              currentStep:
+                "Course generation failed.",
+              error:
+                error.message ||
+                "An unexpected error occurred.",
+              completedAt: new Date(),
+            }
+          );
+        });
+      });
+    } catch (error) {
+      console.error(
+        "Start AI Course Generation Error:",
+        error
+      );
+
+      res.status(500).json({
+        message:
+          "Failed to start course generation.",
+        error: error.message,
+      });
+    }
+  };
+
+export const getCourseGenerationStatus =
+  async (req, res) => {
+    try {
+      if (!ensureAdmin(req, res)) {
+        return;
+      }
+
+      const job =
+        await CourseGenerationJob.findOne({
+          _id: req.params.jobId,
+          createdBy: req.user._id,
+        })
+          .populate(
+            "course",
+            "title slug status image"
+          )
+          .lean();
+
+      if (!job) {
+        return res.status(404).json({
+          message:
+            "Course generation job not found.",
+        });
+      }
+
+      res.status(200).json({
+        job,
+      });
+    } catch (error) {
+      console.error(
+        "Get generation status error:",
+        error
+      );
+
+      res.status(500).json({
+        message: error.message,
+      });
+    }
+  };
+
+export const getActiveCourseGeneration =
+  async (req, res) => {
+    try {
+      if (!ensureAdmin(req, res)) {
+        return;
+      }
+
+      const job =
+        await CourseGenerationJob.findOne(
+          {
+            createdBy: req.user._id,
+            status: {
+              $in: [
+                "pending",
+                "generating",
+              ],
+            },
+          }
+        )
+          .populate(
+            "course",
+            "title slug status image"
+          )
+          .sort({
+            createdAt: -1,
+          })
+          .lean();
+
+      res.status(200).json({
+        job: job || null,
+      });
+    } catch (error) {
+      console.error(
+        "Get active generation error:",
+        error
+      );
+
+      res.status(500).json({
+        message: error.message,
+      });
+    }
+  };
 
 export const createCourse = async (
   req,
@@ -353,30 +650,28 @@ export const getCourses = async (
   }
 };
 
-export const getPublishedCourses = async (
-  req,
-  res
-) => {
-  try {
-    const courses =
-      await Course.find({
-        status: "published",
-      })
-        .populate(
-          "instructor",
-          "fullName email profileImage"
-        )
-        .sort({
-          createdAt: -1,
-        });
+export const getPublishedCourses =
+  async (req, res) => {
+    try {
+      const courses =
+        await Course.find({
+          status: "published",
+        })
+          .populate(
+            "instructor",
+            "fullName email profileImage"
+          )
+          .sort({
+            createdAt: -1,
+          });
 
-    res.status(200).json(courses);
-  } catch (error) {
-    res.status(500).json({
-      message: error.message,
-    });
-  }
-};
+      res.status(200).json(courses);
+    } catch (error) {
+      res.status(500).json({
+        message: error.message,
+      });
+    }
+  };
 
 export const getSingleCourse = async (
   req,
@@ -453,20 +748,43 @@ export const getAdminCourseStructure =
               .lean()
           : [];
 
-      const modulesWithLessons =
+      const quizzes =
+        moduleIds.length > 0
+          ? await Quiz.find({
+              module: {
+                $in: moduleIds,
+              },
+            })
+              .sort({
+                createdAt: 1,
+              })
+              .lean()
+          : [];
+
+      const modulesWithContent =
         modules.map((module) => ({
           ...module,
+
           lessons:
             lessons.filter(
               (lesson) =>
-                lesson.module.toString() ===
+                lesson.module
+                  .toString() ===
                 module._id.toString()
             ),
+
+          quiz:
+            quizzes.find(
+              (quiz) =>
+                quiz.module
+                  .toString() ===
+                module._id.toString()
+            ) || null,
         }));
 
       res.status(200).json({
         course,
-        modules: modulesWithLessons,
+        modules: modulesWithContent,
       });
     } catch (error) {
       console.error(
@@ -597,7 +915,10 @@ export const publishCourse =
         });
       }
 
-      if (course.status === "published") {
+      if (
+        course.status ===
+        "published"
+      ) {
         return res.status(400).json({
           message:
             "This course is already published.",
@@ -684,7 +1005,10 @@ export const enrollCourse = async (
       });
     }
 
-    if (course.status !== "published") {
+    if (
+      course.status !==
+      "published"
+    ) {
       return res.status(403).json({
         message:
           "This course is not available for enrollment yet.",
@@ -727,7 +1051,8 @@ export const enrollCourse = async (
     });
 
     res.json({
-      message: "Enrollment successful",
+      message:
+        "Enrollment successful",
       course,
     });
 

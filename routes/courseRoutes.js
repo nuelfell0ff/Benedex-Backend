@@ -9,6 +9,8 @@ import {
   getStudentCourses,
   getInstructorCourses,
   generateCourseFromSyllabus,
+  getCourseGenerationStatus,
+  getActiveCourseGeneration,
   getAdminCourseStructure,
   updateCourse,
   publishCourse,
@@ -26,6 +28,20 @@ router.post(
   protect,
   authorize("admin"),
   generateCourseFromSyllabus
+);
+
+router.get(
+  "/admin/generation/active",
+  protect,
+  authorize("admin"),
+  getActiveCourseGeneration
+);
+
+router.get(
+  "/admin/generation/:jobId",
+  protect,
+  authorize("admin"),
+  getCourseGenerationStatus
 );
 
 router.get(
