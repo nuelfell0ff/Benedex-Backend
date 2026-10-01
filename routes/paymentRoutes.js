@@ -1,38 +1,50 @@
 import express from "express";
 
 import {
-
-initializePayment,
-verifyPayment,
-getAllPaymentsForAdmin
-
-}
-from "../controllers/paymentController.js";
+  initializePayment,
+  verifyPayment,
+  getAllPaymentsForAdmin,
+} from "../controllers/paymentController.js";
 
 import {
-protect
-}
-from "../middleware/authMiddleware.js";
+  protect,
+  authorize,
+} from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
+// ==========================================
+// INITIALIZE PAYMENT
+// Authenticated users can initialize payments
+// ==========================================
+
 router.post(
-"/initialize",
-protect,
-initializePayment
+  "/initialize",
+  protect,
+  initializePayment
 );
 
+// ==========================================
+// ADMIN PAYMENT REGISTRY
+// ONLY ADMINS CAN VIEW ALL PAYMENTS
+// ==========================================
 
 router.get(
   "/all",
-  protect, // Checks your JWT token
+  protect,
+  authorize("admin"),
   getAllPaymentsForAdmin
 );
 
+// ==========================================
+// VERIFY PAYMENT
+// Authenticated users can verify their payment
+// ==========================================
+
 router.get(
-"/verify/:reference",
-protect,
-verifyPayment
+  "/verify/:reference",
+  protect,
+  verifyPayment
 );
 
 export default router;

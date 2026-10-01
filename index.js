@@ -1,5 +1,6 @@
+import "dotenv/config";
+
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
@@ -33,7 +34,6 @@ import searchRoutes from "./routes/searchRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import notification from "./routes/notifications.js";
 
-dotenv.config();
 
 const app = express();
 

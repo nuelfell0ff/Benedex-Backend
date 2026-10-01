@@ -1,27 +1,99 @@
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 
-// 👇 IMPORT THE CENTRAL AUDIT LOGGER SERVICE HERE
+// Central audit logger service
 import { logAdminActivity } from "../middleware/auditLogger.js";
 
-// Get all users
+// Get users with pagination, search, and role filtering
 export const getUsers = async (req, res) => {
   try {
-    const users = await User.find()
-      .select("-password")
-      .sort({ createdAt: -1 });
+    const {
+      page = 1,
+      limit = 20,
+      search = "",
+      role = "all",
+    } = req.query;
 
-    // 🛡️ SECURITY AUDIT TRAIL: Log viewing global user registry
+    // -----------------------------
+    // PAGINATION
+    // -----------------------------
+    const currentPage = Math.max(parseInt(page, 10) || 1, 1);
+
+    // Never allow more than 20 users per request
+    const usersPerPage = Math.min(
+      Math.max(parseInt(limit, 10) || 20, 1),
+      20
+    );
+
+    const skip = (currentPage - 1) * usersPerPage;
+
+    // -----------------------------
+    // BUILD FILTER
+    // -----------------------------
+    const filter = {};
+
+    // Search by full name or email
+    if (search.trim()) {
+      const searchRegex = new RegExp(search.trim(), "i");
+
+      filter.$or = [
+        { fullName: searchRegex },
+        { email: searchRegex },
+      ];
+    }
+
+    // Filter by role
+    if (
+      role &&
+      role !== "all" &&
+      ["admin", "instructor", "student"].includes(role)
+    ) {
+      filter.role = role;
+    }
+
+    // -----------------------------
+    // FETCH USERS
+    // -----------------------------
+    const users = await User.find(filter)
+      .select("-password")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(usersPerPage)
+      .lean();
+
+    // -----------------------------
+    // CHECK IF MORE USERS EXIST
+    // -----------------------------
+    const nextUser = await User.findOne(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip + usersPerPage)
+      .select("_id")
+      .lean();
+
+    const hasMore = Boolean(nextUser);
+
+    // Security audit trail
     await logAdminActivity(
       req,
       "USER_MANAGEMENT",
       "VIEW",
-      "Accessed and viewed the global users management ledger grid."
+      `Accessed users management registry page ${currentPage} with ${usersPerPage} records per request.`
     );
 
-    res.json(users);
+    res.json({
+      success: true,
+      users,
+      page: currentPage,
+      limit: usersPerPage,
+      hasMore,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Failed to fetch users:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -34,7 +106,7 @@ export const getSingleUser = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 🛡️ SECURITY AUDIT TRAIL: Log looking up a specific individual's configuration
+    // Security audit trail
     await logAdminActivity(
       req,
       "USER_MANAGEMENT",
@@ -58,10 +130,12 @@ export const updateRole = async (req, res) => {
     }
 
     const oldRole = user.role;
+
     user.role = req.body.role;
+
     await user.save();
 
-    // 🛡️ SECURITY AUDIT TRAIL: Track structural privileges shifts
+    // Security audit trail
     await logAdminActivity(
       req,
       "USER_MANAGEMENT",
@@ -71,14 +145,14 @@ export const updateRole = async (req, res) => {
 
     res.json({
       message: "Role updated",
-      user
+      user,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// Suspend/activate
+// Suspend / activate
 export const updateStatus = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -88,11 +162,17 @@ export const updateStatus = async (req, res) => {
     }
 
     const oldStatus = user.status;
+
     user.status = req.body.status;
+
     await user.save();
 
-    // 🛡️ SECURITY AUDIT TRAIL: Keep tabs on account flags/suspensions
-    const actionVerb = user.status === "suspended" ? "SUSPENDED" : "REACTIVATED";
+    // Security audit trail
+    const actionVerb =
+      user.status === "suspended"
+        ? "SUSPENDED"
+        : "REACTIVATED";
+
     await logAdminActivity(
       req,
       "USER_MANAGEMENT",
@@ -102,7 +182,7 @@ export const updateStatus = async (req, res) => {
 
     res.json({
       message: "Status updated",
-      user
+      user,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -118,14 +198,14 @@ export const deleteUser = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Capture user metadata BEFORE the document is wiped from the database
+    // Capture metadata BEFORE deletion
     const targetName = user.fullName;
     const targetEmail = user.email;
     const targetRole = user.role;
 
     await User.findByIdAndDelete(req.params.id);
 
-    // 🛡️ SECURITY AUDIT TRAIL: Clear destructive actions history trail tracking 
+    // Security audit trail
     await logAdminActivity(
       req,
       "USER_MANAGEMENT",
@@ -133,7 +213,9 @@ export const deleteUser = async (req, res) => {
       `PERMANENTLY DELETED user accounts record: "${targetName}" (${targetEmail}) who held the role [${targetRole.toUpperCase()}].`
     );
 
-    res.json({ message: "User deleted" });
+    res.json({
+      message: "User deleted",
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -142,40 +224,54 @@ export const deleteUser = async (req, res) => {
 // Create new user
 export const createUser = async (req, res) => {
   try {
-    const { fullName, email, password, role, status } = req.body;
+    const {
+      fullName,
+      email,
+      password,
+      role,
+      status,
+    } = req.body;
 
-    // 1. Basic validation
+    // Basic validation
     if (!fullName || !email || !password) {
       return res.status(400).json({
-        message: "Please fill in all required fields (Full Name, Email, Password)"
+        message:
+          "Please fill in all required fields (Full Name, Email, Password)",
       });
     }
 
-    // 2. Check if the user already exists
+    // Check if user already exists
     const userExists = await User.findOne({ email });
+
     if (userExists) {
       return res.status(400).json({
-        message: "A user with this email address already exists"
+        message:
+          "A user with this email address already exists",
       });
     }
 
-    // 3. Hash the admin-typed password manually
+    // Hash password
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(
+      password,
+      salt
+    );
 
-    // 4. Create the new user
+    // Create user
     const newUser = await User.create({
       fullName,
       email,
       password: hashedPassword,
-      role: role || "student", 
-      status: status || "active" 
+      role: role || "student",
+      status: status || "active",
     });
 
-    // 5. Return user data without sending back the password field
-    const createdUser = await User.findById(newUser._id).select("-password");
+    // Return user without password
+    const createdUser = await User.findById(
+      newUser._id
+    ).select("-password");
 
-    // 🛡️ SECURITY AUDIT TRAIL: Log direct manual onboarding operations 
+    // Security audit trail
     await logAdminActivity(
       req,
       "USER_MANAGEMENT",
@@ -185,10 +281,11 @@ export const createUser = async (req, res) => {
 
     res.status(201).json({
       message: "User created successfully",
-      user: createdUser
+      user: createdUser,
     });
-
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      message: error.message,
+    });
   }
 };
