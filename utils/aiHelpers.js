@@ -174,7 +174,7 @@ export const parseLLMJson = (rawText) => {
   let cleaned = rawText.trim();
 
   // ----------------------------------------
-  // Remove reasoning blocks if present
+  // Remove reasoning blocks
   // ----------------------------------------
 
   cleaned = cleaned.replace(
@@ -283,15 +283,10 @@ export const callOpenRouterAI = async (
   const returnRaw =
     options.returnRaw === true;
 
-  const candidateModels =
-    hasStructuredOutput
-      ? [
-          "meta-llama/llama-3.3-70b-instruct",
-        ]
-      : [
-          "meta-llama/llama-3.3-70b-instruct",
-          "deepseek/deepseek-r1:free",
-        ];
+  const candidateModels = [
+    "meta-llama/llama-3.3-70b-instruct",
+    "meta-llama/llama-3.1-8b-instruct:free",
+  ];
 
   let rawText = null;
   let lastError = null;
@@ -302,24 +297,23 @@ export const callOpenRouterAI = async (
         `🤖 Calling OpenRouter model: ${modelSlug}`
       );
 
-      // ----------------------------------------
-      // Build request body
-      // ----------------------------------------
-
       const requestBody = {
         model: modelSlug,
+
         messages: [
           {
             role: "user",
             content: prompt,
           },
         ],
-        max_tokens: 16000,
+
+        max_tokens: 12000,
+
         temperature: 0.2,
       };
 
       // ----------------------------------------
-      // Add structured output when requested
+      // Structured JSON output
       // ----------------------------------------
 
       if (hasStructuredOutput) {
@@ -332,7 +326,7 @@ export const callOpenRouterAI = async (
       }
 
       // ----------------------------------------
-      // Call OpenRouter
+      // OpenRouter request
       // ----------------------------------------
 
       const response = await axios.post(
@@ -347,6 +341,7 @@ export const callOpenRouterAI = async (
             "X-Title":
               "Benedex Admin LMS",
           },
+
           timeout: 120000,
         }
       );
@@ -372,10 +367,10 @@ export const callOpenRouterAI = async (
       console.warn(
         `⚠️ ${modelSlug} returned no message content.`
       );
-    } catch (err) {
+    } catch (error) {
       lastError =
-        err.response?.data ||
-        err.message;
+        error.response?.data ||
+        error.message;
 
       console.error(
         `❌ OpenRouter model failed: ${modelSlug}`,
@@ -384,9 +379,9 @@ export const callOpenRouterAI = async (
     }
   }
 
-  // ------------------------------------------
-  // No response from any model
-  // ------------------------------------------
+  // ==========================================
+  // NO MODEL SUCCEEDED
+  // ==========================================
 
   if (!rawText) {
     throw new Error(
@@ -398,11 +393,6 @@ export const callOpenRouterAI = async (
 
   // ==========================================
   // RAW RESPONSE MODE
-  // ==========================================
-  //
-  // Used by lesson generation.
-  //
-  // The lesson is Markdown/text, NOT JSON.
   // ==========================================
 
   if (returnRaw) {

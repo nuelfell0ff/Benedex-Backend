@@ -28,9 +28,195 @@ const ensureAdmin = (req, res) => {
   return true;
 };
 
-// ==========================================
-// GENERATE AND SAVE LESSONS
-// ==========================================
+const generateLessonContent = async (
+  lessonTitle,
+  courseTitle,
+  moduleTitle,
+  apiKey,
+  attempt = 1
+) => {
+  const lessonPrompt = `
+You are an expert medical educator, academic textbook author, curriculum designer, and university-level instructor.
+
+Create a comprehensive, high-quality lesson for a professional paid medical education course.
+
+COURSE:
+"${courseTitle}"
+
+MODULE:
+"${moduleTitle}"
+
+LESSON:
+"${lessonTitle}"
+
+Your job is to teach this topic thoroughly, accurately, and clearly.
+
+This is NOT a short blog post, quick explanation, or study note.
+
+The lesson must feel like a genuine university-level course lesson that a student could study from independently.
+
+CONTENT REQUIREMENTS:
+
+- Write approximately 1,200–1,800 words.
+- Do not intentionally make the lesson short.
+- Cover the topic thoroughly without unnecessary repetition.
+- Use accurate medical and scientific terminology.
+- Explain difficult terminology in simple language when it is first introduced.
+- Assume the student may be learning the topic for the first time.
+- Build the explanation progressively from foundational concepts to more advanced concepts.
+- Explain important mechanisms, processes, structures, relationships, and functions in detail where relevant.
+- Use clinically relevant examples whenever appropriate.
+- Explain why the topic matters in real healthcare practice.
+- Connect theoretical concepts to real-world medical situations where appropriate.
+- Include important distinctions between commonly confused concepts.
+- Mention important clinical implications where relevant.
+- Include examples, scenarios, or brief case-based applications where they genuinely improve understanding.
+- Do not invent medical facts.
+- Do not provide dangerous or irresponsible medical advice.
+- Do not assume the learner already has advanced medical knowledge.
+
+The lesson should be substantial enough to be used as the primary reading material for this topic.
+
+STRUCTURE THE LESSON LIKE THIS:
+
+# ${lessonTitle}
+
+## Introduction
+
+Introduce the topic and explain why it is important in anatomy, physiology, medicine, healthcare, or the relevant medical discipline.
+
+## Learning Objectives
+
+Provide 4–6 clear learning objectives describing what the student should understand after completing the lesson.
+
+## Core Concepts
+
+Provide a detailed explanation of the fundamental concepts necessary to understand the topic.
+
+Use appropriate subsections with ### headings.
+
+## Detailed Explanation
+
+Teach the topic thoroughly.
+
+Break complex ideas into logical sections.
+
+Use:
+
+- Clear explanations
+- Bullet points where useful
+- Numbered steps for processes
+- Tables when comparisons are genuinely useful
+- Examples where appropriate
+
+Do not turn the entire lesson into bullet points. Most of the lesson should be proper educational prose.
+
+## Clinical Relevance
+
+Explain how the topic connects to real healthcare practice.
+
+Where appropriate, discuss:
+
+- Common clinical conditions
+- Symptoms or physiological changes
+- Diagnostic relevance
+- Treatment relevance
+- Patient-care relevance
+- Important clinical observations
+
+Only include clinical information that is genuinely relevant to the lesson.
+
+## Applied Example or Clinical Scenario
+
+Provide at least one realistic educational example or short clinical scenario when appropriate.
+
+Explain how the concepts taught in the lesson apply to that scenario.
+
+## Common Misconceptions
+
+Identify 2–4 common misunderstandings students may have about this topic and explain the correct understanding.
+
+## Key Terms
+
+List and briefly define the most important terminology introduced in the lesson.
+
+## Key Takeaways
+
+Provide 6–10 concise but meaningful points summarizing the most important things the student should remember.
+
+QUALITY REQUIREMENTS:
+
+- Do not pad the lesson with meaningless sentences just to increase word count.
+- Do not repeat the same explanation using different wording.
+- Do not generate generic filler.
+- Do not discuss the course syllabus.
+- Do not discuss other lessons unless a brief connection is genuinely necessary.
+- Stay focused on "${lessonTitle}".
+- Do not generate another lesson.
+- Do not create assignments or quizzes.
+- Do not mention that you are an AI.
+- Do not mention these instructions.
+
+OUTPUT FORMAT:
+
+Return ONLY the complete lesson as Markdown.
+
+Do NOT return JSON.
+
+Do NOT return an object.
+
+Do NOT return fields such as:
+
+"title"
+"content"
+"markdownContent"
+"imageSearchTerm"
+
+The first line must be:
+
+# ${lessonTitle}
+
+Then continue with the complete lesson.
+`;
+
+  try {
+    const markdownContent =
+      await callOpenRouterAI(
+        lessonPrompt,
+        apiKey,
+        {
+          returnRaw: true,
+        }
+      );
+
+    if (
+      !markdownContent ||
+      !markdownContent.trim()
+    ) {
+      throw new Error(
+        "AI returned empty lesson content."
+      );
+    }
+
+    return markdownContent.trim();
+  } catch (error) {
+    if (attempt < 2) {
+      console.warn(
+        `⚠️ Lesson generation failed for "${lessonTitle}". Retrying...`
+      );
+
+      return generateLessonContent(
+        lessonTitle,
+        courseTitle,
+        moduleTitle,
+        apiKey,
+        attempt + 1
+      );
+    }
+
+    throw error;
+  }
+};
 
 export const generateAndSaveLessons =
   async (
@@ -45,7 +231,13 @@ export const generateAndSaveLessons =
       const titles = Array.isArray(
         lessonTitles
       )
-        ? lessonTitles.filter(Boolean)
+        ? lessonTitles
+            .map((title) =>
+              typeof title === "string"
+                ? title.trim()
+                : ""
+            )
+            .filter(Boolean)
         : [];
 
       if (titles.length === 0) {
@@ -76,106 +268,13 @@ export const generateAndSaveLessons =
           "step"
         );
 
-        const lessonPrompt = `
-You are an expert textbook author and professional course instructor.
-
-Create ONE comprehensive, textbook-grade lesson for the course below.
-
-COURSE:
-"${courseTitle}"
-
-MODULE:
-"${moduleTitle}"
-
-LESSON:
-"${lessonTitle}"
-
-DIRECTIVES:
-
-- Write approximately 500-700 words.
-- Make the lesson educational and technically accurate.
-- Make it beginner-friendly where appropriate.
-- Explain important concepts clearly.
-- Use Markdown formatting.
-- Start with a strong introduction.
-- Use appropriate ## and ### headings.
-- Include definitions where necessary.
-- Include practical examples where useful.
-- Include bullet points or numbered lists where useful.
-- Include a section explaining practical application.
-- Include a concise "Key Takeaways" section.
-- Focus ONLY on the lesson titled "${lessonTitle}".
-- Do not generate another lesson.
-- Do not discuss the course syllabus.
-- Do not discuss other lessons.
-
-TECHNICAL CONTENT:
-
-If the lesson involves programming or technical concepts, include useful code examples where appropriate.
-
-Code examples may contain:
-
-- quotation marks
-- apostrophes
-- curly braces
-- square brackets
-- parentheses
-- backticks
-- JSX
-- JavaScript
-- HTML
-- CSS
-- JSON
-- URLs
-
-Write those examples naturally and correctly.
-
-OUTPUT REQUIREMENT:
-
-Return ONLY the lesson itself as Markdown.
-
-DO NOT return JSON.
-
-DO NOT return an object.
-
-DO NOT return fields such as:
-
-"title"
-"markdownContent"
-"imageSearchTerm"
-
-DO NOT include explanations before or after the lesson.
-
-The first line must be:
-
-# ${lessonTitle}
-
-Then continue with the complete lesson.
-`;
-
-        // ======================================
-        // IMPORTANT:
-        // Lesson content is RAW MARKDOWN.
-        // It must NOT go through JSON parsing.
-        // ======================================
-
         const markdownContent =
-          await callOpenRouterAI(
-            lessonPrompt,
-            apiKey,
-            {
-              returnRaw: true,
-            }
+          await generateLessonContent(
+            lessonTitle,
+            courseTitle,
+            moduleTitle,
+            apiKey
           );
-
-        if (
-          !markdownContent ||
-          !markdownContent.trim()
-        ) {
-          throw new Error(
-            `AI returned no lesson content for "${lessonTitle}".`
-          );
-        }
 
         onProgress(
           `         -> Finding cover image for "${lessonTitle}"...`,
@@ -235,10 +334,6 @@ Then continue with the complete lesson.
     }
   };
 
-// ==========================================
-// CREATE LESSON
-// ==========================================
-
 export const createLesson = async (
   req,
   res
@@ -278,10 +373,6 @@ export const createLesson = async (
     });
   }
 };
-
-// ==========================================
-// GET MODULE LESSONS
-// ==========================================
 
 export const getModuleLessons =
   async (req, res) => {
@@ -330,10 +421,6 @@ export const getModuleLessons =
     }
   };
 
-// ==========================================
-// GET ADMIN LESSON DETAILS
-// ==========================================
-
 export const getAdminLessonDetails =
   async (req, res) => {
     try {
@@ -376,10 +463,6 @@ export const getAdminLessonDetails =
       });
     }
   };
-
-// ==========================================
-// UPDATE LESSON
-// ==========================================
 
 export const updateLesson = async (
   req,
@@ -510,10 +593,6 @@ export const updateLesson = async (
   }
 };
 
-// ==========================================
-// COMPLETE LESSON
-// ==========================================
-
 export const completeLesson =
   async (req, res) => {
     try {
@@ -619,10 +698,6 @@ export const completeLesson =
       });
     }
   };
-
-// ==========================================
-// GET LESSON PROGRESS
-// ==========================================
 
 export const getLessonProgress =
   async (req, res) => {
