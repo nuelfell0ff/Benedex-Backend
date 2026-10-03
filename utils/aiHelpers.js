@@ -15,9 +15,11 @@ export const slugify = (text) => {
 // UNSPLASH IMAGE FETCHER
 // ==========================================
 
-export const fetchUnsplashImage = async (query) => {
+export const fetchUnsplashImage = async (
+  query
+) => {
   try {
-    const cleanQuery = query
+    const cleanQuery = String(query || "")
       .replace(/[^\w\s]/gi, "")
       .trim();
 
@@ -37,15 +39,18 @@ export const fetchUnsplashImage = async (query) => {
     );
 
     if (
-      response.data.results &&
+      response.data?.results &&
       response.data.results.length > 0
     ) {
-      const photo = response.data.results[0];
+      const photo =
+        response.data.results[0];
 
       return {
         url: photo.urls.regular,
-        photographerName: photo.user.name,
-        photographerUrl: photo.user.links.html,
+        photographerName:
+          photo.user.name,
+        photographerUrl:
+          photo.user.links.html,
       };
     }
   } catch (error) {
@@ -56,9 +61,11 @@ export const fetchUnsplashImage = async (query) => {
   }
 
   return {
-    url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop",
+    url:
+      "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop",
     photographerName: "Unsplash",
-    photographerUrl: "https://unsplash.com",
+    photographerUrl:
+      "https://unsplash.com",
   };
 };
 
@@ -70,7 +77,10 @@ const extractJsonObject = (text) => {
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
 
-  if (firstBrace === -1 || lastBrace === -1) {
+  if (
+    firstBrace === -1 ||
+    lastBrace === -1
+  ) {
     throw new Error(
       "No JSON object found in AI response."
     );
@@ -92,12 +102,18 @@ const extractJsonObject = (text) => {
 // REPAIR JSON STRING CONTROL CHARACTERS
 // ==========================================
 
-const repairJsonStringCharacters = (json) => {
+const repairJsonStringCharacters = (
+  json
+) => {
   let result = "";
   let insideString = false;
   let escaped = false;
 
-  for (let i = 0; i < json.length; i++) {
+  for (
+    let i = 0;
+    i < json.length;
+    i++
+  ) {
     const char = json[i];
 
     if (escaped) {
@@ -141,7 +157,9 @@ const repairJsonStringCharacters = (json) => {
           break;
 
         default:
-          if (char.charCodeAt(0) < 32) {
+          if (
+            char.charCodeAt(0) < 32
+          ) {
             continue;
           }
 
@@ -161,7 +179,9 @@ const repairJsonStringCharacters = (json) => {
 // LLM JSON PARSER
 // ==========================================
 
-export const parseLLMJson = (rawText) => {
+export const parseLLMJson = (
+  rawText
+) => {
   if (
     !rawText ||
     typeof rawText !== "string"
@@ -195,7 +215,8 @@ export const parseLLMJson = (rawText) => {
   // Extract JSON object
   // ----------------------------------------
 
-  cleaned = extractJsonObject(cleaned);
+  cleaned =
+    extractJsonObject(cleaned);
 
   // ----------------------------------------
   // First attempt
@@ -215,10 +236,13 @@ export const parseLLMJson = (rawText) => {
   // ----------------------------------------
 
   const repaired =
-    repairJsonStringCharacters(cleaned);
+    repairJsonStringCharacters(
+      cleaned
+    );
 
   try {
-    const parsed = JSON.parse(repaired);
+    const parsed =
+      JSON.parse(repaired);
 
     console.log(
       "✅ JSON successfully repaired and parsed."
@@ -308,7 +332,6 @@ export const callOpenRouterAI = async (
         ],
 
         max_tokens: 12000,
-
         temperature: 0.2,
       };
 
@@ -329,26 +352,28 @@ export const callOpenRouterAI = async (
       // OpenRouter request
       // ----------------------------------------
 
-      const response = await axios.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        requestBody,
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer":
-              "http://localhost:5173",
-            "X-Title":
-              "Benedex Admin LMS",
-          },
+      const response =
+        await axios.post(
+          "https://openrouter.ai/api/v1/chat/completions",
+          requestBody,
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type":
+                "application/json",
+              "HTTP-Referer":
+                "https://benedex.org",
+              "X-Title":
+                "Benedex Admin LMS",
+            },
 
-          timeout: 120000,
-        }
-      );
+            timeout: 120000,
+          }
+        );
 
       const content =
-        response.data?.choices?.[0]?.message
-          ?.content;
+        response.data?.choices?.[0]
+          ?.message?.content;
 
       if (content) {
         rawText = content;

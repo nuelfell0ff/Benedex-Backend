@@ -33,10 +33,7 @@ const ensureAdmin = (req, res) => {
   return true;
 };
 
-const updateGenerationJob = async (
-  jobId,
-  updates
-) => {
+const updateGenerationJob = async (jobId, updates) => {
   try {
     await CourseGenerationJob.findByIdAndUpdate(
       jobId,
@@ -60,35 +57,19 @@ const getProgressFromMessage = (
   totalModules,
   completedModules
 ) => {
-  if (
-    message.includes(
-      "Generating course outline"
-    )
-  ) {
+  if (message.includes("Generating course outline")) {
     return 5;
   }
 
-  if (
-    message.includes(
-      "Course outline generated"
-    )
-  ) {
+  if (message.includes("Course outline generated")) {
     return 10;
   }
 
-  if (
-    message.includes(
-      "Preparing course cover image"
-    )
-  ) {
+  if (message.includes("Preparing course cover image")) {
     return 15;
   }
 
-  if (
-    message.includes(
-      "Draft course created"
-    )
-  ) {
+  if (message.includes("Draft course created")) {
     return 20;
   }
 
@@ -109,11 +90,7 @@ const getProgressFromMessage = (
     );
   }
 
-  if (
-    message.includes(
-      "Generating lessons"
-    )
-  ) {
+  if (message.includes("Generating lessons")) {
     if (totalModules <= 0) {
       return 25;
     }
@@ -127,11 +104,7 @@ const getProgressFromMessage = (
     );
   }
 
-  if (
-    message.includes(
-      "Generating quiz"
-    )
-  ) {
+  if (message.includes("Generating quiz")) {
     if (totalModules <= 0) {
       return 25;
     }
@@ -146,6 +119,404 @@ const getProgressFromMessage = (
   }
 
   return null;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Validate AI-generated course outline
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| The backend does NOT decide how many lessons a module should contain.
+|
+| The AI determines the number of lessons from the syllabus.
+|
+| Therefore:
+|
+| - 3 lessons is valid if the syllabus requires 3.
+| - 5 lessons is valid if the syllabus requires 5.
+| - 8 lessons is valid if the syllabus requires 8.
+| - etc.
+|
+| We only make sure that every module has a valid,
+| non-empty lessonTitles array.
+|
+*/
+const validateCourseOutline = (outline) => {
+  if (!outline || typeof outline !== "object") {
+    return {
+      valid: false,
+      reason:
+        "The AI did not return a valid course outline.",
+    };
+  }
+
+  if (
+    !outline.title ||
+    typeof outline.title !== "string" ||
+    !outline.title.trim()
+  ) {
+    return {
+      valid: false,
+      reason:
+        "The generated course is missing a title.",
+    };
+  }
+
+  if (
+    !Array.isArray(outline.modules) ||
+    outline.modules.length === 0
+  ) {
+    return {
+      valid: false,
+      reason:
+        "The generated course contains no modules.",
+    };
+  }
+
+  for (
+    let index = 0;
+    index < outline.modules.length;
+    index++
+  ) {
+    const module = outline.modules[index];
+
+    if (!module || typeof module !== "object") {
+      return {
+        valid: false,
+        reason:
+          `Module ${index + 1} is invalid.`,
+      };
+    }
+
+    if (
+      !module.title ||
+      typeof module.title !== "string" ||
+      !module.title.trim()
+    ) {
+      return {
+        valid: false,
+        reason:
+          `Module ${index + 1} is missing a title.`,
+      };
+    }
+
+    if (!Array.isArray(module.lessonTitles)) {
+      return {
+        valid: false,
+        reason:
+          `Module "${module.title}" does not contain a lessonTitles array.`,
+      };
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Do NOT enforce a lesson count.
+    |--------------------------------------------------------------------------
+    |
+    | The AI decides the number based on the syllabus.
+    |
+    */
+
+    const cleanedLessons = module.lessonTitles
+      .map((lesson) => {
+        if (typeof lesson === "string") {
+          return lesson.trim();
+        }
+
+        if (
+          lesson &&
+          typeof lesson === "object"
+        ) {
+          return String(
+            lesson.title ||
+              lesson.name ||
+              ""
+          ).trim();
+        }
+
+        return "";
+      })
+      .filter(Boolean);
+
+    if (cleanedLessons.length === 0) {
+      return {
+        valid: false,
+        reason:
+          `Module "${module.title}" contains no valid lesson titles.`,
+      };
+    }
+
+    module.lessonTitles = cleanedLessons;
+  }
+
+  return {
+    valid: true,
+    outline,
+  };
+};
+
+/*
+|--------------------------------------------------------------------------
+| Generate Course Outline
+|--------------------------------------------------------------------------
+|
+| The AI determines the complete structure from the syllabus.
+|
+| We intentionally DO NOT specify a fixed number of:
+|
+| - modules
+| - lessons
+|
+| The syllabus is the source of truth.
+|
+*/
+const generateCourseOutline = async (
+  syllabusText,
+  apiKey
+) => {
+  const outlinePrompt = `
+You are an elite academic curriculum designer.
+
+Your task is to analyze the syllabus provided below and transform
+it into a complete, comprehensive, logically structured course
+curriculum.
+
+The syllabus is the PRIMARY SOURCE OF TRUTH.
+
+You must carefully identify ALL topics, subtopics, concepts,
+practical areas, units, and learning areas contained in the syllabus
+and organize them into appropriate modules and lessons.
+
+IMPORTANT:
+
+DO NOT arbitrarily limit the number of modules.
+
+DO NOT arbitrarily limit the number of lessons.
+
+DO NOT assume that every module should contain the same number
+of lessons.
+
+The number of lessons inside each module MUST be determined by
+the actual content of the syllabus.
+
+For example:
+
+If one module naturally contains 3 distinct topics,
+it may have 3 lessons.
+
+If another module naturally contains 5 distinct topics,
+it may have 5 lessons.
+
+If another module requires 8 lessons to properly cover its
+syllabus content, it may have 8 lessons.
+
+There is NO fixed lesson count.
+
+The goal is COMPLETE syllabus coverage.
+
+VERY IMPORTANT:
+
+Do NOT omit topics simply to make the course shorter.
+
+Do NOT merge several distinct syllabus topics into one lesson
+when they deserve separate lessons.
+
+Do NOT split one simple topic into unnecessary lessons just to
+increase the lesson count.
+
+Do NOT create filler lessons.
+
+Do NOT invent unrelated topics.
+
+Do NOT summarize the entire syllabus into only a few lessons.
+
+Instead, preserve the academic structure and coverage of the
+provided syllabus.
+
+Every meaningful topic or learning area from the syllabus should
+be represented in the appropriate module and lesson.
+
+If the syllabus itself explicitly lists individual lessons,
+units, topics, weeks, or subtopics, preserve those distinctions
+where academically appropriate.
+
+The resulting curriculum should be detailed enough that a student
+can use the modules and lessons as a complete learning roadmap.
+
+Each module MUST contain a "lessonTitles" array.
+
+The number of items inside "lessonTitles" must be based entirely
+on the syllabus and the educational structure you determine.
+
+Do NOT use a fixed number.
+
+Return ONLY a valid raw JSON object.
+
+Do NOT wrap the JSON in markdown code fences.
+
+Do NOT write explanations before the JSON.
+
+Do NOT write explanations after the JSON.
+
+REQUIRED JSON STRUCTURE:
+
+{
+  "title": "Comprehensive Course Title",
+  "description": "Detailed course summary",
+  "suggestedTools": [
+    "Tool 1",
+    "Tool 2"
+  ],
+  "modules": [
+    {
+      "title": "Module Title",
+      "description": "Detailed module overview",
+      "month": 1,
+      "lessonTitles": [
+        "Lesson Title 1",
+        "Lesson Title 2"
+      ]
+    }
+  ]
+}
+
+IMPORTANT:
+
+The example above is ONLY an example of the JSON structure.
+
+It does NOT mean that every module should have two lessons.
+
+Generate as many lesson titles as are actually required by
+the syllabus.
+
+The lesson count must come from the syllabus.
+
+SYLLABUS:
+
+${syllabusText}
+`;
+
+  let courseOutline = await callOpenRouterAI(
+    outlinePrompt,
+    apiKey
+  );
+
+  let validation = validateCourseOutline(
+    courseOutline
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Correction attempt
+  |--------------------------------------------------------------------------
+  |
+  | We only retry if the AI returned an invalid structure.
+  |
+  | We DO NOT retry because of a particular lesson count.
+  |
+  */
+  if (!validation.valid) {
+    console.warn(
+      "AI outline failed validation:",
+      validation.reason
+    );
+
+    const correctionPrompt = `
+You generated a course outline from the syllabus below,
+but the generated JSON structure was invalid.
+
+Validation issue:
+
+${validation.reason}
+
+You must correct the structure while preserving COMPLETE
+coverage of the original syllabus.
+
+IMPORTANT:
+
+The number of lessons is NOT fixed.
+
+Do NOT force every module to have the same number of lessons.
+
+Do NOT reduce the number of lessons.
+
+Do NOT add arbitrary filler lessons.
+
+Determine the appropriate number of lessons from the actual
+syllabus content.
+
+Every meaningful topic, subtopic, concept, unit, or learning
+area that belongs in the course should be represented.
+
+If the syllabus naturally requires 3 lessons in a module,
+return 3.
+
+If it requires 5, return 5.
+
+If it requires 8, return 8.
+
+The syllabus determines the structure.
+
+Here is the previous generated outline:
+
+${JSON.stringify(
+  courseOutline,
+  null,
+  2
+)}
+
+Return ONLY valid raw JSON.
+
+Do NOT use markdown.
+
+Do NOT include explanations.
+
+Required structure:
+
+{
+  "title": "Course Title",
+  "description": "Course Description",
+  "suggestedTools": [],
+  "modules": [
+    {
+      "title": "Module Title",
+      "description": "Module Description",
+      "month": 1,
+      "lessonTitles": [
+        "Lesson 1",
+        "Lesson 2"
+      ]
+    }
+  ]
+}
+
+Again, the number of lesson titles is determined by the
+syllabus. There is NO fixed lesson count.
+
+SYLLABUS:
+
+${syllabusText}
+`;
+
+    courseOutline = await callOpenRouterAI(
+      correctionPrompt,
+      apiKey
+    );
+
+    validation = validateCourseOutline(
+      courseOutline
+    );
+  }
+
+  if (!validation.valid) {
+    throw new Error(
+      `AI course outline validation failed: ${validation.reason}`
+    );
+  }
+
+  return validation.outline;
 };
 
 const runCourseGeneration = async ({
@@ -177,48 +548,53 @@ const runCourseGeneration = async ({
       error: null,
     });
 
-    const outlinePrompt = `
-You are an elite academic curriculum designer. Analyze the syllabus text below and output the overarching course metadata and an outline of all modules and their respective lesson titles.
-
-Return ONLY a valid raw JSON object starting with '{' and ending with '}'.
-
-Do not wrap the response in markdown code blocks.
-
-REQUIRED JSON SCHEMA:
-
-{
-  "title": "Comprehensive Course Title",
-  "description": "Extensive course summary",
-  "suggestedTools": ["Tool 1", "Tool 2"],
-  "modules": [
-    {
-      "title": "Module Title",
-      "description": "Module overview",
-      "month": 1,
-      "lessonTitles": [
-        "Lesson Title 1",
-        "Lesson Title 2",
-        "Lesson Title 3",
-        "Lesson Title 4"
-      ]
-    }
-  ]
-}
-
-SYLLABUS:
-
-${syllabusText}
-`;
+    /*
+    |--------------------------------------------------------------------------
+    | Generate and validate course outline
+    |--------------------------------------------------------------------------
+    */
 
     const courseOutline =
-      await callOpenRouterAI(
-        outlinePrompt,
+      await generateCourseOutline(
+        syllabusText,
         apiKey
       );
 
+    console.log(
+      "AI COURSE OUTLINE:",
+      JSON.stringify(
+        courseOutline,
+        null,
+        2
+      )
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Log generated lesson counts
+    |--------------------------------------------------------------------------
+    |
+    | These numbers come directly from the AI.
+    |
+    */
+
+    courseOutline.modules.forEach(
+      (module, index) => {
+        console.log(
+          `Module ${index + 1}: "${module.title}" -> ${module.lessonTitles.length} lessons`
+        );
+
+        console.log(
+          "Lessons:",
+          module.lessonTitles
+        );
+      }
+    );
+
     await updateGenerationJob(jobId, {
       progress: 10,
-      currentStep: `Course outline generated: "${courseOutline.title}"`,
+      currentStep:
+        `Course outline generated: "${courseOutline.title}"`,
     });
 
     await updateGenerationJob(jobId, {
@@ -244,7 +620,9 @@ ${syllabusText}
         slug: uniqueSlug,
       })
     ) {
-      uniqueSlug = `${baseSlug}-${count}`;
+      uniqueSlug =
+        `${baseSlug}-${count}`;
+
       count++;
     }
 
@@ -325,6 +703,18 @@ ${syllabusText}
         updates
       );
     };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Generate modules, lessons and quizzes
+    |--------------------------------------------------------------------------
+    |
+    | generateAndSaveModules receives the exact lessonTitles
+    | produced by the AI.
+    |
+    | It does NOT decide the lesson count.
+    |
+    */
 
     await generateAndSaveModules(
       course._id,
@@ -465,25 +855,28 @@ export const generateCourseFromSyllabus =
           price,
           duration,
           tools,
-        }).catch(async (error) => {
-          console.error(
-            "Unexpected background generation error:",
-            error
-          );
+        }).catch(
+          async (error) => {
+            console.error(
+              "Unexpected background generation error:",
+              error
+            );
 
-          await updateGenerationJob(
-            job._id,
-            {
-              status: "failed",
-              currentStep:
-                "Course generation failed.",
-              error:
-                error.message ||
-                "An unexpected error occurred.",
-              completedAt: new Date(),
-            }
-          );
-        });
+            await updateGenerationJob(
+              job._id,
+              {
+                status: "failed",
+                currentStep:
+                  "Course generation failed.",
+                error:
+                  error.message ||
+                  "An unexpected error occurred.",
+                completedAt:
+                  new Date(),
+              }
+            );
+          }
+        );
       });
     } catch (error) {
       console.error(
@@ -587,14 +980,16 @@ export const createCourse = async (
   res
 ) => {
   try {
-    const course = await Course.create({
-      title: req.body.title,
-      slug: req.body.slug,
-      description: req.body.description,
-      price: req.body.price,
-      tools: req.body.tools,
-      instructor: req.user._id,
-    });
+    const course =
+      await Course.create({
+        title: req.body.title,
+        slug: req.body.slug,
+        description:
+          req.body.description,
+        price: req.body.price,
+        tools: req.body.tools,
+        instructor: req.user._id,
+      });
 
     if (
       req.user &&
@@ -846,7 +1241,9 @@ export const updateCourse =
           req.body.duration;
       }
 
-      if (Array.isArray(req.body.tools)) {
+      if (
+        Array.isArray(req.body.tools)
+      ) {
         allowedUpdates.tools =
           req.body.tools
             .map((tool) =>

@@ -13,13 +13,9 @@ import {
 } from "../utils/aiHelpers.js";
 
 const ensureAdmin = (req, res) => {
-  if (
-    !req.user ||
-    req.user.role !== "admin"
-  ) {
+  if (!req.user || req.user.role !== "admin") {
     res.status(403).json({
-      message:
-        "Administrator access required.",
+      message: "Administrator access required.",
     });
 
     return false;
@@ -180,14 +176,13 @@ Then continue with the complete lesson.
 `;
 
   try {
-    const markdownContent =
-      await callOpenRouterAI(
-        lessonPrompt,
-        apiKey,
-        {
-          returnRaw: true,
-        }
-      );
+    const markdownContent = await callOpenRouterAI(
+      lessonPrompt,
+      apiKey,
+      {
+        returnRaw: true,
+      }
+    );
 
     if (
       !markdownContent ||
@@ -218,155 +213,169 @@ Then continue with the complete lesson.
   }
 };
 
-export const generateAndSaveLessons =
-  async (
-    moduleId,
-    courseTitle,
-    moduleTitle,
-    lessonTitles,
-    apiKey,
-    onProgress = () => {}
-  ) => {
-    try {
-      const titles = Array.isArray(
-        lessonTitles
-      )
-        ? lessonTitles
-            .map((title) =>
-              typeof title === "string"
-                ? title.trim()
-                : ""
-            )
-            .filter(Boolean)
-        : [];
+export const generateAndSaveLessons = async (
+  moduleId,
+  courseTitle,
+  moduleTitle,
+  lessonTitles,
+  apiKey,
+  onProgress = () => {}
+) => {
+  try {
+    const titles = Array.isArray(lessonTitles)
+      ? lessonTitles
+          .map((title) => {
+            if (typeof title === "string") {
+              return title.trim();
+            }
 
-      if (titles.length === 0) {
-        onProgress(
-          `   ! No lesson titles found for "${moduleTitle}".`,
-          "error"
-        );
+            if (
+              title &&
+              typeof title === "object"
+            ) {
+              return String(
+                title.title ||
+                  title.name ||
+                  ""
+              ).trim();
+            }
 
-        return;
-      }
+            return "";
+          })
+          .filter(Boolean)
+      : [];
 
+    if (titles.length === 0) {
       onProgress(
-        `   -> Generating ${titles.length} lessons for module: "${moduleTitle}"...`,
-        "step"
-      );
-
-      let lessonOrder = 1;
-
-      for (const lessonTitle of titles) {
-        const currentLesson =
-          lessonOrder;
-
-        const totalLessons =
-          titles.length;
-
-        onProgress(
-          `      -> Generating lesson ${currentLesson}/${totalLessons}: "${lessonTitle}"...`,
-          "step"
-        );
-
-        const markdownContent =
-          await generateLessonContent(
-            lessonTitle,
-            courseTitle,
-            moduleTitle,
-            apiKey
-          );
-
-        onProgress(
-          `         -> Finding cover image for "${lessonTitle}"...`,
-          "step"
-        );
-
-        const heroImageData =
-          await fetchUnsplashImage(
-            lessonTitle
-          );
-
-        onProgress(
-          `         -> Saving lesson "${lessonTitle}"...`,
-          "step"
-        );
-
-        await Lesson.create({
-          title: lessonTitle,
-          type: "text",
-          content: markdownContent,
-          illustrationUrl:
-            heroImageData.url,
-          photographerName:
-            heroImageData.photographerName,
-          photographerUrl:
-            heroImageData.photographerUrl,
-          module: moduleId,
-          order: lessonOrder,
-          isPreview:
-            lessonOrder === 1,
-        });
-
-        onProgress(
-          `         + Lesson ${currentLesson}/${totalLessons} saved successfully: "${lessonTitle}"`,
-          "success"
-        );
-
-        lessonOrder++;
-      }
-
-      onProgress(
-        `   + All ${titles.length} lessons generated for "${moduleTitle}".`,
-        "success"
-      );
-    } catch (error) {
-      onProgress(
-        `   ! Failed to generate lessons for "${moduleTitle}": ${error.message}`,
+        `   ! No lesson titles found for "${moduleTitle}".`,
         "error"
       );
 
-      console.error(
-        `Failed to generate lessons for module "${moduleTitle}":`,
-        error
+      return [];
+    }
+
+    console.log(
+      `📚 Lesson generation request: ${titles.length} lessons`
+    );
+
+    console.log(
+      `📋 Lesson titles for "${moduleTitle}":`,
+      titles
+    );
+
+    onProgress(
+      `   -> Generating ${titles.length} lessons for module: "${moduleTitle}"...`,
+      "step"
+    );
+
+    const createdLessons = [];
+
+    for (
+      let index = 0;
+      index < titles.length;
+      index++
+    ) {
+      const lessonTitle = titles[index];
+
+      const currentLesson = index + 1;
+      const totalLessons = titles.length;
+
+      onProgress(
+        `      -> Generating lesson ${currentLesson}/${totalLessons}: "${lessonTitle}"...`,
+        "step"
       );
 
-      throw error;
+      const markdownContent =
+        await generateLessonContent(
+          lessonTitle,
+          courseTitle,
+          moduleTitle,
+          apiKey
+        );
+
+      onProgress(
+        `         -> Finding cover image for "${lessonTitle}"...`,
+        "step"
+      );
+
+      const heroImageData =
+        await fetchUnsplashImage(
+          lessonTitle
+        );
+
+      onProgress(
+        `         -> Saving lesson "${lessonTitle}"...`,
+        "step"
+      );
+
+      const lesson = await Lesson.create({
+        title: lessonTitle,
+        type: "text",
+        content: markdownContent,
+        illustrationUrl:
+          heroImageData.url,
+        photographerName:
+          heroImageData.photographerName,
+        photographerUrl:
+          heroImageData.photographerUrl,
+        module: moduleId,
+        order: currentLesson,
+        isPreview: currentLesson === 1,
+      });
+
+      createdLessons.push(lesson);
+
+      onProgress(
+        `         + Lesson ${currentLesson}/${totalLessons} saved successfully: "${lessonTitle}"`,
+        "success"
+      );
     }
-  };
+
+    onProgress(
+      `   + All ${createdLessons.length}/${titles.length} lessons generated for "${moduleTitle}".`,
+      "success"
+    );
+
+    return createdLessons;
+  } catch (error) {
+    onProgress(
+      `   ! Failed to generate lessons for "${moduleTitle}": ${error.message}`,
+      "error"
+    );
+
+    console.error(
+      `Failed to generate lessons for module "${moduleTitle}":`,
+      error
+    );
+
+    throw error;
+  }
+};
 
 export const createLesson = async (
   req,
   res
 ) => {
   try {
-    const lesson =
-      await Lesson.create({
-        title: req.body.title,
-        type:
-          req.body.type || "text",
-        content:
-          req.body.content,
-        videoUrl:
-          req.body.videoUrl,
-        documentUrl:
-          req.body.documentUrl,
-        illustrationUrl:
-          req.body.illustrationUrl,
-        photographerName:
-          req.body.photographerName,
-        photographerUrl:
-          req.body.photographerUrl,
-        module:
-          req.body.module,
-        order:
-          req.body.order,
-        isPreview:
-          req.body.isPreview || false,
-      });
+    const lesson = await Lesson.create({
+      title: req.body.title,
+      type: req.body.type || "text",
+      content: req.body.content,
+      videoUrl: req.body.videoUrl,
+      documentUrl: req.body.documentUrl,
+      illustrationUrl:
+        req.body.illustrationUrl,
+      photographerName:
+        req.body.photographerName,
+      photographerUrl:
+        req.body.photographerUrl,
+      module: req.body.module,
+      order: req.body.order,
+      isPreview:
+        req.body.isPreview || false,
+    });
 
-    res.status(201).json(
-      lesson
-    );
+    res.status(201).json(lesson);
   } catch (error) {
     res.status(500).json({
       message: error.message,
@@ -374,52 +383,46 @@ export const createLesson = async (
   }
 };
 
-export const getModuleLessons =
-  async (req, res) => {
-    try {
-      const module =
-        await Module.findById(
-          req.params.moduleId
-        ).select(
-          "course title"
-        );
+export const getModuleLessons = async (
+  req,
+  res
+) => {
+  try {
+    const module = await Module.findById(
+      req.params.moduleId
+    ).select("course title");
 
-      if (!module) {
-        return res.status(404).json({
-          message:
-            "Module not found.",
-        });
-      }
-
-      const course =
-        await Course.findOne({
-          _id: module.course,
-          status: "published",
-        }).select(
-          "_id title status"
-        );
-
-      if (!course) {
-        return res.status(404).json({
-          message:
-            "Course not found or is not currently published.",
-        });
-      }
-
-      const lessons =
-        await Lesson.find({
-          module: module._id,
-        }).sort({
-          order: 1,
-        });
-
-      res.json(lessons);
-    } catch (error) {
-      res.status(500).json({
-        message: error.message,
+    if (!module) {
+      return res.status(404).json({
+        message: "Module not found.",
       });
     }
-  };
+
+    const course = await Course.findOne({
+      _id: module.course,
+      status: "published",
+    }).select("_id title status");
+
+    if (!course) {
+      return res.status(404).json({
+        message:
+          "Course not found or is not currently published.",
+      });
+    }
+
+    const lessons = await Lesson.find({
+      module: module._id,
+    }).sort({
+      order: 1,
+    });
+
+    res.json(lessons);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
 
 export const getAdminLessonDetails =
   async (req, res) => {
@@ -429,29 +432,23 @@ export const getAdminLessonDetails =
       }
 
       const lesson =
-        await Lesson.findById(
-          req.params.id
-        )
+        await Lesson.findById(req.params.id)
           .populate({
             path: "module",
             populate: {
               path: "course",
-              select:
-                "title slug status",
+              select: "title slug status",
             },
           })
           .lean();
 
       if (!lesson) {
         return res.status(404).json({
-          message:
-            "Lesson not found.",
+          message: "Lesson not found.",
         });
       }
 
-      res.status(200).json(
-        lesson
-      );
+      res.status(200).json(lesson);
     } catch (error) {
       console.error(
         "Admin lesson details error:",
@@ -476,40 +473,35 @@ export const updateLesson = async (
     const allowedUpdates = {};
 
     if (
-      typeof req.body.title ===
-      "string"
+      typeof req.body.title === "string"
     ) {
       allowedUpdates.title =
         req.body.title.trim();
     }
 
     if (
-      typeof req.body.type ===
-      "string"
+      typeof req.body.type === "string"
     ) {
       allowedUpdates.type =
         req.body.type;
     }
 
     if (
-      typeof req.body.content ===
-      "string"
+      typeof req.body.content === "string"
     ) {
       allowedUpdates.content =
         req.body.content;
     }
 
     if (
-      typeof req.body.videoUrl ===
-      "string"
+      typeof req.body.videoUrl === "string"
     ) {
       allowedUpdates.videoUrl =
         req.body.videoUrl;
     }
 
     if (
-      typeof req.body.documentUrl ===
-      "string"
+      typeof req.body.documentUrl === "string"
     ) {
       allowedUpdates.documentUrl =
         req.body.documentUrl;
@@ -540,21 +532,26 @@ export const updateLesson = async (
     }
 
     if (
-      req.body.order !==
-      undefined
+      req.body.order !== undefined
     ) {
-      allowedUpdates.order =
-        Number(req.body.order) || 1;
+      const parsedOrder = Number(
+        req.body.order
+      );
+
+      if (
+        Number.isFinite(parsedOrder) &&
+        parsedOrder > 0
+      ) {
+        allowedUpdates.order =
+          parsedOrder;
+      }
     }
 
     if (
-      req.body.isPreview !==
-      undefined
+      req.body.isPreview !== undefined
     ) {
       allowedUpdates.isPreview =
-        Boolean(
-          req.body.isPreview
-        );
+        Boolean(req.body.isPreview);
     }
 
     const lesson =
@@ -571,8 +568,7 @@ export const updateLesson = async (
 
     if (!lesson) {
       return res.status(404).json({
-        message:
-          "Lesson not found.",
+        message: "Lesson not found.",
       });
     }
 
@@ -593,162 +589,127 @@ export const updateLesson = async (
   }
 };
 
-export const completeLesson =
-  async (req, res) => {
-    try {
-      const lessonId =
-        req.params.lessonId;
+export const completeLesson = async (
+  req,
+  res
+) => {
+  try {
+    const lessonId =
+      req.params.lessonId;
 
-      const studentId =
-        req.user._id;
+    const studentId =
+      req.user._id;
 
-      if (!lessonId) {
-        return res.status(400).json({
-          message:
-            "Lesson ID is required.",
-        });
-      }
+    if (!lessonId) {
+      return res.status(400).json({
+        message: "Lesson ID is required.",
+      });
+    }
 
-      if (!studentId) {
-        return res.status(401).json({
-          message:
-            "Authentication required.",
-        });
-      }
+    if (!studentId) {
+      return res.status(401).json({
+        message:
+          "Authentication required.",
+      });
+    }
 
-      const lesson =
-        await Lesson.findById(
-          lessonId
-        ).populate({
+    const lesson =
+      await Lesson.findById(lessonId)
+        .populate({
           path: "module",
           populate: {
             path: "course",
-            select:
-              "title status",
+            select: "title status",
           },
         });
 
-      if (!lesson) {
-        return res.status(404).json({
-          message:
-            "Lesson not found.",
-        });
-      }
-
-      const course =
-        lesson.module?.course;
-
-      if (
-        !course ||
-        course.status !==
-          "published"
-      ) {
-        return res.status(403).json({
-          message:
-            "This lesson is not available because its course has not been published.",
-        });
-      }
-
-      /*
-       * Check whether this lesson has
-       * already been completed.
-       *
-       * This makes the endpoint safe to
-       * call multiple times.
-       */
-      const existingProgress =
-        await LessonProgress.findOne({
-          student: studentId,
-          lesson: lessonId,
-        });
-
-      if (
-        existingProgress?.completed ===
-        true
-      ) {
-        return res.status(200).json({
-          message:
-            "Lesson already completed.",
-          progress:
-            existingProgress,
-          alreadyCompleted: true,
-        });
-      }
-
-      /*
-       * Mark the lesson as completed.
-       *
-       * We use findOneAndUpdate so that
-       * an existing progress document is
-       * updated instead of creating another
-       * one.
-       */
-      const progress =
-        await LessonProgress.findOneAndUpdate(
-          {
-            student: studentId,
-            lesson: lessonId,
-          },
-          {
-            $set: {
-              completed: true,
-            },
-          },
-          {
-            new: true,
-            upsert: true,
-            setDefaultsOnInsert: true,
-          }
-        );
-
-      /*
-       * IMPORTANT:
-       *
-       * Recording the learning activity is
-       * secondary to completing the lesson.
-       *
-       * If the activity system fails, the
-       * lesson should STILL remain completed.
-       *
-       * This prevents a tracking/analytics
-       * problem from turning into a failed
-       * "Mark as Complete" request.
-       */
-      try {
-        await recordLearningActivity({
-          student: studentId,
-          type:
-            "lesson_completed",
-          title: `Completed ${
-            lesson.title ||
-            "Lesson"
-          }`,
-          points: 5,
-        });
-      } catch (activityError) {
-        console.error(
-          "Learning activity recording failed after lesson completion:",
-          activityError
-        );
-      }
-
-      return res.status(200).json({
-        message:
-          "Lesson completed successfully.",
-        progress,
-        alreadyCompleted: false,
-      });
-    } catch (error) {
-      console.error(
-        "Error completing lesson:",
-        error
-      );
-
-      return res.status(500).json({
-        message: error.message,
+    if (!lesson) {
+      return res.status(404).json({
+        message: "Lesson not found.",
       });
     }
-  };
+
+    const course =
+      lesson.module?.course;
+
+    if (
+      !course ||
+      course.status !== "published"
+    ) {
+      return res.status(403).json({
+        message:
+          "This lesson is not available because its course has not been published.",
+      });
+    }
+
+    const existingProgress =
+      await LessonProgress.findOne({
+        student: studentId,
+        lesson: lessonId,
+      });
+
+    if (
+      existingProgress?.completed === true
+    ) {
+      return res.status(200).json({
+        message:
+          "Lesson already completed.",
+        progress: existingProgress,
+        alreadyCompleted: true,
+      });
+    }
+
+    const progress =
+      await LessonProgress.findOneAndUpdate(
+        {
+          student: studentId,
+          lesson: lessonId,
+        },
+        {
+          $set: {
+            completed: true,
+          },
+        },
+        {
+          new: true,
+          upsert: true,
+          setDefaultsOnInsert: true,
+        }
+      );
+
+    try {
+      await recordLearningActivity({
+        student: studentId,
+        type: "lesson_completed",
+        title: `Completed ${
+          lesson.title || "Lesson"
+        }`,
+        points: 5,
+      });
+    } catch (activityError) {
+      console.error(
+        "Learning activity recording failed after lesson completion:",
+        activityError
+      );
+    }
+
+    return res.status(200).json({
+      message:
+        "Lesson completed successfully.",
+      progress,
+      alreadyCompleted: false,
+    });
+  } catch (error) {
+    console.error(
+      "Error completing lesson:",
+      error
+    );
+
+    return res.status(500).json({
+      message: error.message,
+    });
+  }
+};
 
 export const getLessonProgress =
   async (req, res) => {
@@ -757,9 +718,7 @@ export const getLessonProgress =
         await LessonProgress.find({
           student: req.user._id,
           completed: true,
-        }).populate(
-          "lesson"
-        );
+        }).populate("lesson");
 
       res.json(progress);
     } catch (error) {
