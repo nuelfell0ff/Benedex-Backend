@@ -4,14 +4,8 @@ import axios from "axios";
 // OPENROUTER CONFIGURATION
 // ==========================================
 
-// Keep the model chain here instead of scattering
-// model names throughout the application.
-//
-// OpenRouter supports model-level fallbacks through
-// the `models` array. It also handles provider-level
-// failover automatically.
 const OPENROUTER_MODELS = [
-  "meta-llama/llama-3.1-8b-instruct",
+  "meta-llama/llama-3.1-8b-instruct:free",
   "openrouter/free",
 ];
 
@@ -38,9 +32,7 @@ export const fetchUnsplashImage = async (query) => {
       .trim();
 
     if (!cleanQuery) {
-      throw new Error(
-        "Unsplash query is empty."
-      );
+      throw new Error("Unsplash query is empty.");
     }
 
     const response = await axios.get(
@@ -64,15 +56,13 @@ export const fetchUnsplashImage = async (query) => {
       response.data?.results &&
       response.data.results.length > 0
     ) {
-      const photo =
-        response.data.results[0];
+      const photo = response.data.results[0];
 
       return {
         url: photo.urls.regular,
 
         photographerName:
-          photo.user?.name ||
-          "Unsplash",
+          photo.user?.name || "Unsplash",
 
         photographerUrl:
           photo.user?.links?.html ||
@@ -81,13 +71,12 @@ export const fetchUnsplashImage = async (query) => {
     }
 
     console.warn(
-      `⚠️ Unsplash returned no images for "${query}". Using fallback image.`
+      `Unsplash returned no images for "${query}". Using fallback image.`
     );
   } catch (error) {
     console.error(
-      `⚠️ Unsplash fetch failed for query "${query}":`,
-      error.response?.data ||
-        error.message
+      `Unsplash fetch failed for "${query}":`,
+      error.response?.data || error.message
     );
   }
 
@@ -96,13 +85,11 @@ export const fetchUnsplashImage = async (query) => {
   // ==========================================
 
   return {
-    url:
-      "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop",
+    url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop",
 
     photographerName: "Unsplash",
 
-    photographerUrl:
-      "https://unsplash.com",
+    photographerUrl: "https://unsplash.com",
   };
 };
 
@@ -111,11 +98,8 @@ export const fetchUnsplashImage = async (query) => {
 // ==========================================
 
 const extractJsonObject = (text) => {
-  const firstBrace =
-    text.indexOf("{");
-
-  const lastBrace =
-    text.lastIndexOf("}");
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
 
   if (
     firstBrace === -1 ||
@@ -142,9 +126,7 @@ const extractJsonObject = (text) => {
 // REPAIR JSON STRING CONTROL CHARACTERS
 // ==========================================
 
-const repairJsonStringCharacters = (
-  json
-) => {
+const repairJsonStringCharacters = (json) => {
   let result = "";
 
   let insideString = false;
@@ -189,8 +171,7 @@ const repairJsonStringCharacters = (
     if (char === '"') {
       result += char;
 
-      insideString =
-        !insideString;
+      insideString = !insideString;
 
       continue;
     }
@@ -244,9 +225,7 @@ const repairJsonStringCharacters = (
 // LLM JSON PARSER
 // ==========================================
 
-export const parseLLMJson = (
-  rawText
-) => {
+export const parseLLMJson = (rawText) => {
   if (
     !rawText ||
     typeof rawText !== "string"
@@ -256,8 +235,7 @@ export const parseLLMJson = (
     );
   }
 
-  let cleaned =
-    rawText.trim();
+  let cleaned = rawText.trim();
 
   // ----------------------------------------
   // Remove <think> blocks
@@ -292,7 +270,7 @@ export const parseLLMJson = (
     return JSON.parse(cleaned);
   } catch (firstError) {
     console.warn(
-      "⚠️ Initial JSON parse failed. Attempting JSON repair...",
+      "Initial JSON parse failed. Attempting JSON repair...",
       firstError.message
     );
   }
@@ -311,13 +289,13 @@ export const parseLLMJson = (
       JSON.parse(repaired);
 
     console.log(
-      "✅ JSON successfully repaired and parsed."
+      "JSON successfully repaired and parsed."
     );
 
     return parsed;
   } catch (secondError) {
     console.error(
-      "❌ JSON repair failed:",
+      "JSON repair failed:",
       secondError.message
     );
 
@@ -387,7 +365,7 @@ const getOpenRouterErrorMessage = (
   }
 
   if (status === 402) {
-    return "OpenRouter requires credits for the selected model.";
+    return "OpenRouter could not use a free model. Please check the available free-model limit on your OpenRouter account.";
   }
 
   if (status === 403) {
@@ -451,9 +429,7 @@ export const callOpenRouterAI = async (
   const returnRaw =
     options.returnRaw === true;
 
-  // Allow a specific model to be supplied
-  // when necessary, while still using the
-  // normal fallback chain by default.
+  // Use only the free models by default.
   const models =
     Array.isArray(options.models) &&
     options.models.length > 0
@@ -461,15 +437,13 @@ export const callOpenRouterAI = async (
       : OPENROUTER_MODELS;
 
   console.log(
-    "🤖 OpenRouter model fallback chain:",
+    "OpenRouter model fallback chain:",
     models
   );
 
   const requestBody = {
-    // Primary model.
     model: models[0],
 
-    // OpenRouter model-level fallback chain.
     models,
 
     messages: [
@@ -479,8 +453,6 @@ export const callOpenRouterAI = async (
       },
     ],
 
-    // Keep this high enough for your course
-    // outline and lesson generation.
     max_tokens:
       options.maxTokens ||
       12000,
@@ -489,8 +461,6 @@ export const callOpenRouterAI = async (
       options.temperature ??
       0.2,
 
-    // Explicitly allow provider-level
-    // fallback.
     provider: {
       allow_fallbacks: true,
     },
@@ -505,19 +475,11 @@ export const callOpenRouterAI = async (
       options.responseFormat;
 
     console.log(
-      "🧩 Structured JSON output enabled."
+      "Structured JSON output enabled."
     );
   }
 
   let lastError = null;
-
-  // ----------------------------------------
-  // Retry entire request if OpenRouter
-  // temporarily fails.
-  //
-  // This is intentionally small so we don't
-  // hammer the API.
-  // ----------------------------------------
 
   const maxAttempts =
     options.maxAttempts || 2;
@@ -529,7 +491,7 @@ export const callOpenRouterAI = async (
   ) {
     try {
       console.log(
-        `🤖 OpenRouter request attempt ${attempt}/${maxAttempts}`
+        `OpenRouter request attempt ${attempt}/${maxAttempts}`
       );
 
       const response =
@@ -564,8 +526,7 @@ export const callOpenRouterAI = async (
 
       if (
         !content ||
-        typeof content !==
-          "string"
+        typeof content !== "string"
       ) {
         throw new Error(
           "OpenRouter returned no usable message content."
@@ -573,15 +534,15 @@ export const callOpenRouterAI = async (
       }
 
       console.log(
-        "✅ AI response received."
+        "AI response received."
       );
 
       console.log(
-        `📦 AI response length: ${content.length} characters`
+        `AI response length: ${content.length} characters`
       );
 
       console.log(
-        `🧠 Actual model used: ${
+        `AI model used: ${
           response.data?.model ||
           "unknown"
         }`
@@ -606,7 +567,7 @@ export const callOpenRouterAI = async (
           );
         } catch (error) {
           console.warn(
-            "⚠️ Structured output was not directly parseable. Falling back to JSON parser..."
+            "Structured output was not directly parseable. Falling back to JSON parser..."
           );
 
           return parseLLMJson(
@@ -634,7 +595,7 @@ export const callOpenRouterAI = async (
         );
 
       console.error(
-        `❌ OpenRouter attempt ${attempt} failed:`,
+        `OpenRouter attempt ${attempt} failed:`,
         {
           status,
           message:
@@ -657,7 +618,7 @@ export const callOpenRouterAI = async (
       }
 
       // --------------------------------------
-      // Wait briefly before retrying.
+      // Wait before retrying.
       // --------------------------------------
 
       if (
@@ -667,7 +628,7 @@ export const callOpenRouterAI = async (
           1500 * attempt;
 
         console.log(
-          `⏳ Retrying OpenRouter in ${delay}ms...`
+          `Retrying OpenRouter in ${delay}ms...`
         );
 
         await new Promise(
