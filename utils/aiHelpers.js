@@ -6,6 +6,9 @@ import axios from "axios";
 
 const OPENROUTER_MODELS = [
   "meta-llama/llama-3.1-8b-instruct:free",
+  "deepseek/deepseek-chat:free",
+  "deepseek/deepseek-chat-v3.1:free",
+  "meta-llama/llama-3.1-405b-instruct:free",
   "openrouter/free",
 ];
 
@@ -43,11 +46,9 @@ export const fetchUnsplashImage = async (query) => {
           per_page: 5,
           orientation: "landscape",
         },
-
         headers: {
           Authorization: `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}`,
         },
-
         timeout: 10000,
       }
     );
@@ -60,10 +61,8 @@ export const fetchUnsplashImage = async (query) => {
 
       return {
         url: photo.urls.regular,
-
         photographerName:
           photo.user?.name || "Unsplash",
-
         photographerUrl:
           photo.user?.links?.html ||
           "https://unsplash.com",
@@ -86,9 +85,7 @@ export const fetchUnsplashImage = async (query) => {
 
   return {
     url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop",
-
     photographerName: "Unsplash",
-
     photographerUrl: "https://unsplash.com",
   };
 };
@@ -101,25 +98,15 @@ const extractJsonObject = (text) => {
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
 
-  if (
-    firstBrace === -1 ||
-    lastBrace === -1
-  ) {
-    throw new Error(
-      "No JSON object found in AI response."
-    );
+  if (firstBrace === -1 || lastBrace === -1) {
+    throw new Error("No JSON object found in AI response.");
   }
 
   if (lastBrace <= firstBrace) {
-    throw new Error(
-      "AI returned an incomplete JSON object."
-    );
+    throw new Error("AI returned an incomplete JSON object.");
   }
 
-  return text.slice(
-    firstBrace,
-    lastBrace + 1
-  );
+  return text.slice(firstBrace, lastBrace + 1);
 };
 
 // ==========================================
@@ -128,58 +115,34 @@ const extractJsonObject = (text) => {
 
 const repairJsonStringCharacters = (json) => {
   let result = "";
-
   let insideString = false;
-
   let escaped = false;
 
-  for (
-    let i = 0;
-    i < json.length;
-    i++
-  ) {
+  for (let i = 0; i < json.length; i++) {
     const char = json[i];
 
-    // ----------------------------------------
     // Previous character was an escape
-    // ----------------------------------------
-
     if (escaped) {
       result += char;
-
       escaped = false;
-
       continue;
     }
 
-    // ----------------------------------------
     // Escape character
-    // ----------------------------------------
-
     if (char === "\\") {
       result += char;
-
       escaped = true;
-
       continue;
     }
 
-    // ----------------------------------------
     // String delimiter
-    // ----------------------------------------
-
     if (char === '"') {
       result += char;
-
       insideString = !insideString;
-
       continue;
     }
 
-    // ----------------------------------------
     // Repair characters inside strings
-    // ----------------------------------------
-
     if (insideString) {
       switch (char) {
         case "\n":
@@ -203,9 +166,7 @@ const repairJsonStringCharacters = (json) => {
           break;
 
         default:
-          if (
-            char.charCodeAt(0) < 32
-          ) {
+          if (char.charCodeAt(0) < 32) {
             continue;
           }
 
@@ -226,46 +187,28 @@ const repairJsonStringCharacters = (json) => {
 // ==========================================
 
 export const parseLLMJson = (rawText) => {
-  if (
-    !rawText ||
-    typeof rawText !== "string"
-  ) {
-    throw new Error(
-      "AI returned an empty response."
-    );
+  if (!rawText || typeof rawText !== "string") {
+    throw new Error("AI returned an empty response.");
   }
 
   let cleaned = rawText.trim();
 
-  // ----------------------------------------
   // Remove <think> blocks
-  // ----------------------------------------
-
   cleaned = cleaned.replace(
     /<think>[\s\S]*?<\/think>/gi,
     ""
   );
 
-  // ----------------------------------------
   // Remove markdown code fences
-  // ----------------------------------------
-
   cleaned = cleaned
     .replace(/```json/gi, "")
     .replace(/```/g, "")
     .trim();
 
-  // ----------------------------------------
   // Extract JSON object
-  // ----------------------------------------
+  cleaned = extractJsonObject(cleaned);
 
-  cleaned =
-    extractJsonObject(cleaned);
-
-  // ----------------------------------------
   // First JSON parse attempt
-  // ----------------------------------------
-
   try {
     return JSON.parse(cleaned);
   } catch (firstError) {
@@ -275,18 +218,12 @@ export const parseLLMJson = (rawText) => {
     );
   }
 
-  // ----------------------------------------
   // Second attempt: repair control chars
-  // ----------------------------------------
-
   const repaired =
-    repairJsonStringCharacters(
-      cleaned
-    );
+    repairJsonStringCharacters(cleaned);
 
   try {
-    const parsed =
-      JSON.parse(repaired);
+    const parsed = JSON.parse(repaired);
 
     console.log(
       "JSON successfully repaired and parsed."
@@ -305,8 +242,7 @@ export const parseLLMJson = (rawText) => {
       );
 
     if (match) {
-      const position =
-        Number(match[1]);
+      const position = Number(match[1]);
 
       const start = Math.max(
         0,
@@ -320,19 +256,13 @@ export const parseLLMJson = (rawText) => {
 
       console.error(
         "JSON around error position:\n",
-        repaired.slice(
-          start,
-          end
-        )
+        repaired.slice(start, end)
       );
     }
 
     console.error(
       "AI JSON response beginning:\n",
-      repaired.slice(
-        0,
-        1000
-      )
+      repaired.slice(0, 1000)
     );
 
     throw new Error(
@@ -345,14 +275,9 @@ export const parseLLMJson = (rawText) => {
 // OPENROUTER ERROR FORMATTER
 // ==========================================
 
-const getOpenRouterErrorMessage = (
-  error
-) => {
-  const status =
-    error.response?.status;
-
-  const data =
-    error.response?.data;
+const getOpenRouterErrorMessage = (error) => {
+  const status = error.response?.status;
+  const data = error.response?.data;
 
   const message =
     data?.error?.message ||
@@ -365,7 +290,7 @@ const getOpenRouterErrorMessage = (
   }
 
   if (status === 402) {
-    return "OpenRouter could not use a free model. Please check the available free-model limit on your OpenRouter account.";
+    return "OpenRouter could not use the selected free model.";
   }
 
   if (status === 403) {
@@ -381,14 +306,11 @@ const getOpenRouterErrorMessage = (
   }
 
   if (status === 429) {
-    return "OpenRouter rate limit reached. Please try again shortly.";
+    return "OpenRouter rate limit reached.";
   }
 
-  if (
-    status >= 500 &&
-    status <= 599
-  ) {
-    return "OpenRouter is temporarily unavailable. Please try again shortly.";
+  if (status >= 500 && status <= 599) {
+    return "OpenRouter is temporarily unavailable.";
   }
 
   return message;
@@ -422,14 +344,13 @@ export const callOpenRouterAI = async (
   }
 
   const hasStructuredOutput =
-    Boolean(
-      options.responseFormat
-    );
+    Boolean(options.responseFormat);
 
   const returnRaw =
     options.returnRaw === true;
 
-  // Use only the free models by default.
+  // Use custom models if supplied.
+  // Otherwise use the free-model fallback chain.
   const models =
     Array.isArray(options.models) &&
     options.models.length > 0
@@ -441,58 +362,63 @@ export const callOpenRouterAI = async (
     models
   );
 
-  const requestBody = {
-    model: models[0],
-
-    models,
-
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
-
-    max_tokens:
-      options.maxTokens ||
-      12000,
-
-    temperature:
-      options.temperature ??
-      0.2,
-
-    provider: {
-      allow_fallbacks: true,
-    },
-  };
-
-  // ----------------------------------------
-  // Structured JSON output
-  // ----------------------------------------
-
-  if (hasStructuredOutput) {
-    requestBody.response_format =
-      options.responseFormat;
-
-    console.log(
-      "Structured JSON output enabled."
-    );
-  }
+  const maxAttempts =
+    options.maxAttempts ||
+    models.length;
 
   let lastError = null;
 
-  const maxAttempts =
-    options.maxAttempts || 2;
+  // ==========================================
+  // TRY EACH MODEL
+  // ==========================================
 
   for (
     let attempt = 1;
     attempt <= maxAttempts;
     attempt++
   ) {
+    const model =
+      models[
+        (attempt - 1) % models.length
+      ];
+
     try {
       console.log(
         `OpenRouter request attempt ${attempt}/${maxAttempts}`
       );
+
+      console.log(
+        `Trying model: ${model}`
+      );
+
+      const requestBody = {
+        model,
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        max_tokens:
+          options.maxTokens ||
+          12000,
+        temperature:
+          options.temperature ??
+          0.2,
+      };
+
+      // ========================================
+      // STRUCTURED JSON OUTPUT
+      // ========================================
+
+      if (hasStructuredOutput) {
+        requestBody.response_format =
+          options.responseFormat;
+
+        console.log(
+          "Structured JSON output enabled."
+        );
+      }
 
       const response =
         await axios.post(
@@ -544,45 +470,40 @@ export const callOpenRouterAI = async (
       console.log(
         `AI model used: ${
           response.data?.model ||
-          "unknown"
+          model
         }`
       );
 
-      // --------------------------------------
+      // ========================================
       // RAW RESPONSE MODE
-      // --------------------------------------
+      // ========================================
 
       if (returnRaw) {
         return content.trim();
       }
 
-      // --------------------------------------
+      // ========================================
       // STRUCTURED JSON OUTPUT
-      // --------------------------------------
+      // ========================================
 
       if (hasStructuredOutput) {
         try {
-          return JSON.parse(
-            content
-          );
+          return JSON.parse(content);
         } catch (error) {
           console.warn(
             "Structured output was not directly parseable. Falling back to JSON parser..."
           );
 
-          return parseLLMJson(
-            content
-          );
+          return parseLLMJson(content);
         }
       }
 
-      // --------------------------------------
+      // ========================================
       // NORMAL JSON RESPONSE
-      // --------------------------------------
+      // ========================================
 
-      return parseLLMJson(
-        content
-      );
+      return parseLLMJson(content);
+
     } catch (error) {
       lastError = error;
 
@@ -597,18 +518,18 @@ export const callOpenRouterAI = async (
       console.error(
         `OpenRouter attempt ${attempt} failed:`,
         {
+          model,
           status,
-          message:
-            formattedError,
+          message: formattedError,
           providerResponse:
             error.response?.data ||
             null,
         }
       );
 
-      // --------------------------------------
-      // Do not retry authentication errors.
-      // --------------------------------------
+      // ========================================
+      // DO NOT RETRY AUTH ERRORS
+      // ========================================
 
       if (
         status === 401 ||
@@ -617,18 +538,22 @@ export const callOpenRouterAI = async (
         break;
       }
 
-      // --------------------------------------
-      // Wait before retrying.
-      // --------------------------------------
+      // ========================================
+      // TRY ANOTHER MODEL
+      // ========================================
 
       if (
         attempt < maxAttempts
       ) {
-        const delay =
-          1500 * attempt;
+        let delay = 1000;
+
+        // Rate limit = wait a little longer
+        if (status === 429) {
+          delay = 3000;
+        }
 
         console.log(
-          `Retrying OpenRouter in ${delay}ms...`
+          `Trying another OpenRouter model in ${delay}ms...`
         );
 
         await new Promise(
